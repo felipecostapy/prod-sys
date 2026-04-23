@@ -18,8 +18,6 @@ ARQUIVOS = [
     "interface.py",
     "gerador.py",
     "planilha.py",
-    "logo_agro.png",
-    "logo_top.png",
     "ordemagroviav2.xlsx",
     "ordemtopv2.xlsx",
 ]
