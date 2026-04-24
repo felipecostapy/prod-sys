@@ -3393,47 +3393,67 @@ class UI(QWidget):
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Prévia do email")
-        dlg.setMinimumWidth(540)
+        dlg.setMinimumWidth(980)
         dlg.setStyleSheet(DIALOG_SS)
 
         lay = QVBoxLayout(dlg)
         lay.setContentsMargins(20, 20, 20, 20)
         lay.setSpacing(8)
 
-        # ── Botões de email rápido ──────────────────────
+        # ── Cards de email rápido ──────────────────────
         if emails_rapidos:
             lbl_rapido = QLabel("E-MAILS RÁPIDOS")
             lbl_rapido.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
             lay.addWidget(lbl_rapido)
 
-            btn_wrap = QWidget()
-            btn_wrap.setStyleSheet("background: transparent;")
-            btn_flow = QHBoxLayout(btn_wrap)
-            btn_flow.setContentsMargins(0, 0, 0, 4)
-            btn_flow.setSpacing(6)
-            btn_flow.setAlignment(Qt.AlignLeft)
+            # Scroll area para os cards
+            scroll_wrap = QScrollArea()
+            scroll_wrap.setWidgetResizable(True)
+            scroll_wrap.setMaximumHeight(260)
+            scroll_wrap.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget { background: transparent; }")
+
+            cards_container = QWidget()
+            cards_container.setStyleSheet("background: transparent;")
+            grid_lay = QGridLayout(cards_container)
+            grid_lay.setContentsMargins(0, 0, 0, 4)
+            grid_lay.setSpacing(6)
 
             email_btns = {}
+            COLS = 5
 
-            def _make_btn_email(email):
-                btn = QPushButton(email)
+            def _make_card_email(email, corpo_email):
+                btn = QPushButton()
                 btn.setCheckable(True)
+                btn.setFixedSize(180, 90)
+
+                inner = QVBoxLayout(btn)
+                inner.setContentsMargins(8, 6, 8, 6)
+                inner.setSpacing(3)
+
+                lbl_email = QLabel(email)
+                lbl_email.setWordWrap(True)
+                lbl_email.setStyleSheet(f"color: {TEXT}; font-size: 9px; font-weight: 700; background: transparent;")
+
+                lbl_corpo = QLabel(corpo_email[:120] + ("..." if len(corpo_email) > 120 else ""))
+                lbl_corpo.setWordWrap(True)
+                lbl_corpo.setStyleSheet(f"color: {MUTED}; font-size: 8px; background: transparent;")
+
+                inner.addWidget(lbl_email)
+                inner.addWidget(lbl_corpo)
+                inner.addStretch()
+
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: transparent;
                         border: 1px solid {BORDER2};
-                        border-radius: 5px;
-                        color: {MUTED};
-                        font-size: 10px;
-                        padding: 4px 8px;
+                        border-radius: 6px;
+                        text-align: left;
                     }}
                     QPushButton:checked {{
                         background: {ACCENT}22;
                         border-color: {ACCENT};
-                        color: {ACCENT};
-                        font-weight: 700;
                     }}
-                    QPushButton:hover {{ border-color: {ACCENT}; color: {TEXT}; }}
+                    QPushButton:hover {{ border-color: {ACCENT}; }}
                 """)
                 return btn
 
@@ -3452,14 +3472,21 @@ class UI(QWidget):
                     atual.append(email)
                 inp_d.setText(";".join(atual))
 
-            for email in emails_rapidos:
-                b = _make_btn_email(email)
+            for i, email in enumerate(emails_rapidos):
+                # Buscar corpo do email nas REGRAS_EMAIL
+                corpo_preview = ""
+                for regra_val in REGRAS_EMAIL.values():
+                    if email in regra_val:
+                        corpo_preview = corpo or ""
+                        break
+
+                b = _make_card_email(email, email)
                 email_btns[email] = b
-                btn_flow.addWidget(b)
+                grid_lay.addWidget(b, i // COLS, i % COLS)
                 b.clicked.connect(lambda checked, em=email: _toggle_email(em))
 
-            btn_flow.addStretch()
-            lay.addWidget(btn_wrap)
+            scroll_wrap.setWidget(cards_container)
+            lay.addWidget(scroll_wrap)
 
             # Marcar botões dos emails que já estão no destinatário inicial
             QTimer.singleShot(0, _atualizar_botoes)
