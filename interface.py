@@ -354,6 +354,14 @@ def carregar_usuarios():
 
 
 
+# ═══════════════════════════════════════════════════════════════════
+# INSTRUÇÃO: Substitua todo o conteúdo entre as linhas 357 e 861
+# do arquivo interface.py por este código.
+# (Da linha "class HistoricoWidget(QWidget):" até o final do
+#  método _abrir_arquivo, inclusive a linha em branco após ele.)
+# Os métodos _reeditar_ordem e _abrir_arquivo são mantidos iguais.
+# ═══════════════════════════════════════════════════════════════════
+
 class HistoricoWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -432,13 +440,13 @@ class HistoricoWidget(QWidget):
             self._lbl_load_anim.setText(_frames[self._load_frame[0]])
         self._load_timer.timeout.connect(_animar)
 
-        # Página 1 — cards
+        # Página 1 — container de cards em 2 colunas
         self._container = QWidget()
         self._container.setStyleSheet("background: transparent;")
-        self._vbox = QVBoxLayout(self._container)
-        self._vbox.setSpacing(6)
-        self._vbox.setContentsMargins(0, 0, 4, 0)
-        self._vbox.addStretch()
+        self._outer_vbox = QVBoxLayout(self._container)
+        self._outer_vbox.setSpacing(8)
+        self._outer_vbox.setContentsMargins(0, 0, 4, 0)
+        self._outer_vbox.addStretch()
 
         scroll.setWidget(self._container)
 
@@ -446,11 +454,12 @@ class HistoricoWidget(QWidget):
         self._stack_hist.addWidget(scroll)     # índice 1
         root.addWidget(self._stack_hist)
 
-        self._todos_cards = []
+        self._todos_registros = []
+        self._fonte_atual     = "supabase"
+        self._todos_cards     = []
         self.recarregar()
 
     def recarregar(self):
-        # Mostrar tela de loading
         self._stack_hist.setCurrentIndex(0)
         self._load_timer.start()
         self._btn_att.setEnabled(False)
@@ -458,14 +467,6 @@ class HistoricoWidget(QWidget):
         self._lbl_carregando.setText("")
         QApplication.processEvents()
 
-        # Limpar cards atuais
-        while self._vbox.count() > 1:
-            item = self._vbox.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self._todos_cards = []
-
-        # Rodar em thread para não travar UI
         class _Thread(QThread):
             concluido = Signal(list, str)
             def run(self_):
@@ -480,199 +481,392 @@ class HistoricoWidget(QWidget):
         self._thread_hist.start()
 
     def _on_historico_carregado(self, registros, fonte):
+        import datetime as _dt
         self._load_timer.stop()
         self._stack_hist.setCurrentIndex(1)
         self._btn_att.setEnabled(True)
         self._btn_att.setText("↺  ATUALIZAR")
         self._lbl_carregando.setText("")
 
-        if not registros:
-            vazio = QLabel("Nenhuma ordem gerada ainda.")
-            vazio.setAlignment(Qt.AlignCenter)
-            vazio.setStyleSheet(f"color: {MUTED}; font-size: 13px; background: transparent;")
-            self._vbox.insertWidget(0, vazio)
-            return
-
-        # Agrupar por data
-        grupos = {}
+        # Pré-processa datas e horários em cada registro
         for r in registros:
             if fonte == "supabase":
-                criado = str(r.get("criado_em","") or "")
+                criado = str(r.get("criado_em", "") or "")
                 try:
-                    import datetime as _dt
-                    # Supabase pode retornar com T ou espaço: normalizar
                     criado_norm = criado[:19].replace("T", " ")
                     dt = _dt.datetime.strptime(criado_norm, "%Y-%m-%d %H:%M:%S") - _dt.timedelta(hours=3)
-                    data = dt.strftime("%d/%m/%Y")
-                    r["_data_fmt"] = data
+                    r["_data_fmt"] = dt.strftime("%d/%m/%Y")
                     r["_hora_fmt"] = dt.strftime("%H:%M")
+                    r["_dt_obj"]   = dt
                 except Exception:
-                    raw = str(r.get("data",""))
-                    if len(raw) == 10 and raw[4] == "-":
-                        data = raw[8:10]+"/"+raw[5:7]+"/"+raw[:4]
-                    else:
-                        data = raw
-                    r["_data_fmt"] = data
+                    raw = str(r.get("data", ""))
+                    r["_data_fmt"] = raw[8:10]+"/"+raw[5:7]+"/"+raw[:4] if (len(raw) == 10 and raw[4] == "-") else raw
                     r["_hora_fmt"] = ""
+                    r["_dt_obj"]   = None
             else:
-                data = r.get("data_hora","")[:10]
-                r["_data_fmt"] = data
-                r["_hora_fmt"] = r.get("data_hora","")[-5:]
-            grupos.setdefault(data, []).append(r)
+                r["_data_fmt"] = r.get("data_hora", "")[:10]
+                r["_hora_fmt"] = r.get("data_hora", "")[-5:]
+                r["_dt_obj"]   = None
 
-        for data, items in grupos.items():
-            lbl = QLabel(data)
-            lbl.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-weight: 700; letter-spacing: 1px; background: transparent; padding: 6px 0 2px 0;")
-            self._vbox.insertWidget(self._vbox.count() - 1, lbl)
-            for r in items:
-                card, frame = self._make_card(r, fonte)
-                self._todos_cards.append((r, frame))
-                self._vbox.insertWidget(self._vbox.count() - 1, frame)
+        self._todos_registros = registros
+        self._fonte_atual     = fonte
+        self._renderizar(registros)
+
+    @staticmethod
+    def _tempo_atras(dt_obj):
+        """Retorna 'há X min/h/dias' a partir de um datetime, ou '' se None."""
+        if not dt_obj:
+            return ""
+        import datetime as _dt
+        delta = _dt.datetime.now() - dt_obj
+        s = int(delta.total_seconds())
+        if s < 60:    return "agora"
+        if s < 3600:  return f"há {s // 60} min"
+        if s < 86400: return f"há {s // 3600}h"
+        d = s // 86400
+        return f"há {d} dia{'s' if d > 1 else ''}"
+
+    def _renderizar(self, registros):
+        """Limpa o container e reconstrói os cards em 2 colunas por linha."""
+        # Remove todos os widgets/layouts antes do stretch final
+        while self._outer_vbox.count() > 1:
+            item = self._outer_vbox.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._todos_cards = []
+
+        if not registros:
+            vazio = QLabel("Nenhuma ordem encontrada.")
+            vazio.setAlignment(Qt.AlignCenter)
+            vazio.setStyleSheet(
+                f"color: {MUTED}; font-size: 13px; background: transparent; padding: 40px;"
+            )
+            self._outer_vbox.insertWidget(0, vazio)
+            return
+
+        # Agrupa por data mantendo a ordem de chegada
+        grupos      = {}
+        ordem_grupos = []
+        for r in registros:
+            data = r.get("_data_fmt", "")
+            if data not in grupos:
+                grupos[data] = []
+                ordem_grupos.append(data)
+            grupos[data].append(r)
+
+        insert_pos = 0
+        for data in ordem_grupos:
+            items = grupos[data]
+
+            # Rótulo de data
+            lbl_data = QLabel(data if data else "—")
+            lbl_data.setStyleSheet(
+                f"color: {MUTED}; font-size: 10px; font-weight: 700; "
+                f"letter-spacing: 1px; background: transparent; padding: 6px 0 2px 0;"
+            )
+            self._outer_vbox.insertWidget(insert_pos, lbl_data)
+            insert_pos += 1
+
+            # Cards em pares (2 colunas)
+            for i in range(0, len(items), 2):
+                row_w = QWidget()
+                row_w.setStyleSheet("background: transparent;")
+                row_h = QHBoxLayout(row_w)
+                row_h.setContentsMargins(0, 0, 0, 0)
+                row_h.setSpacing(10)
+
+                for j in range(2):
+                    if i + j < len(items):
+                        r_item = items[i + j]
+                        card_frame = self._make_card(r_item, self._fonte_atual)
+                        self._todos_cards.append((r_item, card_frame))
+                        row_h.addWidget(card_frame)
+                    else:
+                        # Célula vazia para manter proporção
+                        filler = QWidget()
+                        filler.setStyleSheet("background: transparent;")
+                        row_h.addWidget(filler)
+
+                self._outer_vbox.insertWidget(insert_pos, row_w)
+                insert_pos += 1
 
     def _filtrar(self, texto):
         txt = texto.strip().upper()
-        for r, frame in self._todos_cards:
-            if not txt:
-                frame.setVisible(True)
-                continue
-            campos = [
-                str(r.get("motorista","") or r.get("Motorista","")),
-                str(r.get("placa","") or r.get("Cavalo","")),
-                str(r.get("pagador","") or r.get("Cliente","")),
-                str(r.get("pedido","") or r.get("Pedido","")),
-                str(r.get("destino","") or r.get("Destino","")),
-                str(r.get("colocador","") or r.get("Colocador","")),
-                str(r.get("id","") or r.get("supabase_id","")),
-            ]
-            frame.setVisible(any(txt in c.upper() for c in campos))
+        if not txt:
+            self._renderizar(self._todos_registros)
+            return
+        filtrados = [
+            r for r in self._todos_registros
+            if any(
+                txt in str(v).upper()
+                for v in [
+                    r.get("motorista","") or r.get("Motorista",""),
+                    r.get("placa","")     or r.get("Cavalo",""),
+                    r.get("pagador","")   or r.get("Cliente",""),
+                    r.get("pedido","")    or r.get("Pedido",""),
+                    r.get("destino","")   or r.get("Destino",""),
+                    r.get("colocador","") or r.get("Colocador",""),
+                    r.get("id","")        or r.get("supabase_id",""),
+                ]
+            )
+        ]
+        self._renderizar(filtrados)
 
     def _make_card(self, r, fonte="supabase"):
-        # Extrair campos compatíveis com Supabase e local
-        sb_id    = r.get("id") or r.get("supabase_id", "")
-        hora     = r.get("_hora_fmt", r.get("data_hora","")[-5:])
-        filial   = str(r.get("filial","") or "").upper()
-        empresa  = r.get("empresa","") or ("Agrovia" if "AGRO" in filial else "TopBrasil" if filial else "")
-        motorista_txt = str(r.get("motorista","") or r.get("dados",{}).get("Motorista","—") or "—").title()
-        placa_txt     = str(r.get("placa","")     or r.get("dados",{}).get("Cavalo","—")    or "—")
-        cliente_txt   = str(r.get("pagador","")   or r.get("dados",{}).get("Cliente","")   or "").upper()
-        pedido_txt    = str(r.get("pedido","")    or r.get("dados",{}).get("Pedido","")    or "")
-        destino_txt   = str(r.get("destino","")   or r.get("dados",{}).get("Destino","")   or "").upper()
-        colocador_txt = str(r.get("colocador","") or r.get("dados",{}).get("Colocador","") or "").upper()
-        status_txt    = str(r.get("status","")    or "").upper()
+        # ── Extração de campos ────────────────────────────────────────
+        sb_id         = r.get("id") or r.get("supabase_id", "")
+        dt_obj        = r.get("_dt_obj")
+        data_fmt      = r.get("_data_fmt", "")
+        hora_fmt      = r.get("_hora_fmt", "")
+        filial        = str(r.get("filial", "") or "").upper()
+        empresa       = r.get("empresa", "") or (
+            "Agrovia" if "AGRO" in filial else "TopBrasil" if filial else ""
+        )
+        motorista_txt = str(
+            r.get("motorista","") or r.get("dados",{}).get("Motorista","—") or "—"
+        ).title()
+        placa_txt     = str(
+            r.get("placa","")   or r.get("dados",{}).get("Cavalo","") or ""
+        ).upper()
+        cliente_txt   = str(
+            r.get("pagador","") or r.get("dados",{}).get("Cliente","") or ""
+        ).upper()
+        pedido_txt    = str(
+            r.get("pedido","")  or r.get("dados",{}).get("Pedido","") or ""
+        )
+        destino_txt   = str(
+            r.get("destino","") or r.get("dados",{}).get("Destino","") or ""
+        ).upper()
+        uf_txt        = str(
+            r.get("uf","")      or r.get("dados",{}).get("UF","") or ""
+        ).upper()
+        peso_txt      = str(
+            r.get("peso","")    or r.get("dados",{}).get("Peso","") or ""
+        )
+        produto_txt   = str(
+            r.get("produto","") or r.get("dados",{}).get("Produto","") or ""
+        ).upper()
+        status_txt    = str(r.get("status", "") or "").upper()
         ativo         = r.get("ativo", True)
-        inativo       = (not ativo) or status_txt in ("DESISTIU","ALTERADO")
-        obs_txt       = str(r.get("observacao","") or "")
+        inativo       = (not ativo) or status_txt in ("DESISTIU", "ALTERADO")
+        obs_txt       = str(r.get("observacao", "") or "")
+        tempo_str     = self._tempo_atras(dt_obj)
 
-        cor_emp   = ACCENT if "AGRO" in empresa.upper() else DANGER
-        cor_borda = BORDER2 if not inativo else "#f8514933"
-        bg_cor    = "#2a08082a" if inativo else SURFACE
+        # ── Cores ─────────────────────────────────────────────────────
+        cor_emp    = ACCENT if "AGRO" in empresa.upper() else DANGER
+        cor_borda  = "#f8514933" if inativo else BORDER
+        bg_cor     = "#1a0808" if inativo else SURFACE
 
+        STATUS_CORES = {
+            "CARREGADO": "#3fb950", "PAGO": "#58a6ff", "MARCADO": "#e3b341",
+            "AGUARDANDO": "#8b949e", "DESCARGA": "#bc8cff",
+            "CHEGA": "#79c0ff", "A CAMINHO": "#79c0ff",
+            "DESISTIU": "#f85149", "ALTERADO": "#f85149",
+        }
+        cor_status = STATUS_CORES.get(status_txt, MUTED)
+
+        # ── Frame principal ───────────────────────────────────────────
         frame = QFrame()
-        frame.setMinimumHeight(52)
+        frame.setMinimumWidth(260)
         frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {bg_cor};
                 border: 1px solid {cor_borda};
-                border-radius: 8px;
+                border-radius: 10px;
             }}
         """)
 
-        h = QHBoxLayout(frame)
-        h.setContentsMargins(12, 8, 12, 8)
-        h.setSpacing(8)
+        v = QVBoxLayout(frame)
+        v.setContentsMargins(14, 12, 14, 12)
+        v.setSpacing(7)
 
-        # Número da ordem + hora
+        # ── Linha 1: número da ordem + tempo + badge empresa ──────────
+        top = QHBoxLayout(); top.setSpacing(6)
+
         num_lbl = QLabel(f"#{sb_id}" if sb_id else "")
-        num_lbl.setStyleSheet(f"color: {ACCENT}; font-size: 12px; font-weight: 700; background: transparent; min-width: 48px;")
-        hora_lbl = QLabel(hora)
-        hora_lbl.setStyleSheet(f"color: {MUTED}; font-size: 10px; background: transparent; min-width: 38px;")
-        num_col = QVBoxLayout(); num_col.setSpacing(1)
-        num_col.addWidget(num_lbl); num_col.addWidget(hora_lbl)
+        num_lbl.setStyleSheet(
+            f"color: {ACCENT}; font-size: 11px; font-weight: 700; background: transparent;"
+        )
 
-        # Motorista + placa
-        mot_lbl = QLabel(motorista_txt)
-        mot_lbl.setStyleSheet(f"color: {TEXT}; font-size: 12px; font-weight: 600; background: transparent;")
-        pla_lbl = QLabel(placa_txt)
-        pla_lbl.setStyleSheet(f"color: {MUTED}; font-size: 10px; background: transparent;")
-        mot_col = QVBoxLayout(); mot_col.setSpacing(1)
-        mot_col.addWidget(mot_lbl); mot_col.addWidget(pla_lbl)
-        # mot_col substituído por mot_w abaixo
+        tempo_label_txt = tempo_str if tempo_str else f"{data_fmt}  {hora_fmt}".strip()
+        lbl_tempo = QLabel(tempo_label_txt)
+        lbl_tempo.setStyleSheet(
+            f"color: {MUTED}; font-size: 10px; background: transparent;"
+        )
 
-        def _info(label, valor, maxw=None):
-            w = QWidget()
-            w.setStyleSheet("background: transparent; border: none;")
-            if maxw: w.setMaximumWidth(maxw)
-            v = QVBoxLayout(w); v.setSpacing(0); v.setContentsMargins(0,0,0,0)
-            l = QLabel(label)
-            l.setStyleSheet(f"color: {MUTED}; font-size: 8px; font-weight: 700; letter-spacing: 0.5px; background: transparent;")
-            t = QLabel(str(valor or "—"))
-            t.setStyleSheet(f"color: {TEXT}; font-size: 11px; background: transparent;")
-            if maxw: t.setMaximumWidth(maxw - 4)
-            v.addWidget(l); v.addWidget(t)
-            return w
-
-        # Badge empresa
-        badge = QLabel(empresa.upper() if empresa else "—")
-        badge.setStyleSheet(f"""
-            color: {cor_emp}; background: transparent;
-            font-size: 10px; font-weight: 700; padding: 2px 4px;
+        emp_badge = QLabel(empresa.upper() if empresa else "—")
+        emp_badge.setAlignment(Qt.AlignCenter)
+        emp_badge.setStyleSheet(f"""
+            color: {cor_emp};
+            background: {cor_emp}18;
+            border: 1px solid {cor_emp}44;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
         """)
 
-        # Status badge
-        STATUS_CORES = {
-            "CARREGADO": "#3fb950","PAGO": "#58a6ff","MARCADO": "#e3b341",
-            "AGUARDANDO": "#8b949e","DESCARGA": "#bc8cff",
-            "CHEGA": "#79c0ff","A CAMINHO": "#79c0ff",
-            "DESISTIU": "#f85149","ALTERADO": "#f85149",
-        }
-        st_cor = STATUS_CORES.get(status_txt, MUTED)
+        top.addWidget(num_lbl)
+        top.addWidget(lbl_tempo)
+        top.addStretch()
+        top.addWidget(emp_badge)
+        v.addLayout(top)
+
+        # Separador
+        sep1 = QFrame(); sep1.setFrameShape(QFrame.HLine)
+        sep1.setStyleSheet(f"background: {BORDER}; border: none; max-height: 1px;")
+        v.addWidget(sep1)
+
+        # ── Linha 2: destino com ícone de local ───────────────────────
+        loc = QHBoxLayout(); loc.setSpacing(4)
+        pin = QLabel("📍")
+        pin.setStyleSheet("background: transparent; font-size: 11px;")
+        dest_str = f"{destino_txt} — {uf_txt}" if uf_txt else (destino_txt or "—")
+        lbl_dest = QLabel(dest_str)
+        lbl_dest.setStyleSheet(
+            f"color: {TEXT}; font-size: 12px; font-weight: 600; background: transparent;"
+        )
+        lbl_dest.setWordWrap(True)
+        loc.addWidget(pin)
+        loc.addWidget(lbl_dest, 1)
+        v.addLayout(loc)
+
+        # ── Linha 3: motorista + placa ────────────────────────────────
+        mot_h = QHBoxLayout(); mot_h.setSpacing(8)
+        lbl_mot = QLabel(motorista_txt)
+        lbl_mot.setStyleSheet(
+            f"color: {TEXT}; font-size: 12px; background: transparent;"
+        )
+        lbl_pla = QLabel(placa_txt or "—")
+        lbl_pla.setStyleSheet(f"""
+            color: {MUTED};
+            background: {BORDER}44;
+            border: 1px solid {BORDER2};
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 6px;
+        """)
+        mot_h.addWidget(lbl_mot, 1)
+        mot_h.addWidget(lbl_pla)
+        v.addLayout(mot_h)
+
+        # ── Linha 4: cliente + produto (linha sutil) ──────────────────
+        if cliente_txt or produto_txt:
+            info_h = QHBoxLayout(); info_h.setSpacing(4)
+            if cliente_txt:
+                lbl_cli = QLabel(cliente_txt)
+                lbl_cli.setStyleSheet(
+                    f"color: {MUTED}; font-size: 10px; background: transparent;"
+                )
+                lbl_cli.setWordWrap(True)
+                info_h.addWidget(lbl_cli, 1)
+            if produto_txt:
+                lbl_prod = QLabel(produto_txt)
+                lbl_prod.setStyleSheet(
+                    f"color: {MUTED}; font-size: 10px; background: transparent;"
+                )
+                lbl_prod.setWordWrap(True)
+                lbl_prod.setAlignment(Qt.AlignRight)
+                info_h.addWidget(lbl_prod, 1)
+            v.addLayout(info_h)
+
+        # Separador
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.HLine)
+        sep2.setStyleSheet(f"background: {BORDER}; border: none; max-height: 1px;")
+        v.addWidget(sep2)
+
+        # ── Linha 5: pedido + peso ────────────────────────────────────
+        ped_h = QHBoxLayout(); ped_h.setSpacing(6)
+
+        # Coluna pedido
+        carga_w = QWidget(); carga_w.setStyleSheet("background: transparent;")
+        carga_v = QVBoxLayout(carga_w)
+        carga_v.setSpacing(1); carga_v.setContentsMargins(0, 0, 0, 0)
+        lbl_ped_cap = QLabel("PEDIDO")
+        lbl_ped_cap.setStyleSheet(
+            f"color: {MUTED}; font-size: 8px; font-weight: 700; "
+            f"letter-spacing: 0.5px; background: transparent;"
+        )
+        lbl_pedido = QLabel(pedido_txt or "—")
+        lbl_pedido.setStyleSheet(
+            f"color: {TEXT}; font-size: 13px; font-weight: 700; background: transparent;"
+        )
+        carga_v.addWidget(lbl_ped_cap)
+        carga_v.addWidget(lbl_pedido)
+
+        # Coluna peso
+        peso_w = QWidget(); peso_w.setStyleSheet("background: transparent;")
+        peso_v = QVBoxLayout(peso_w)
+        peso_v.setSpacing(1); peso_v.setContentsMargins(0, 0, 0, 0)
+        lbl_peso_cap = QLabel("PESO")
+        lbl_peso_cap.setStyleSheet(
+            f"color: {MUTED}; font-size: 8px; font-weight: 700; "
+            f"letter-spacing: 0.5px; background: transparent;"
+        )
+        lbl_peso_cap.setAlignment(Qt.AlignRight)
+        try:
+            peso_fmt = f"{float(str(peso_txt).replace(',', '.')):.2f} t" if peso_txt else "—"
+        except Exception:
+            peso_fmt = f"{peso_txt} t" if peso_txt else "—"
+        lbl_peso = QLabel(peso_fmt)
+        lbl_peso.setStyleSheet(
+            f"color: {TEXT}; font-size: 13px; font-weight: 700; background: transparent;"
+        )
+        lbl_peso.setAlignment(Qt.AlignRight)
+        peso_v.addWidget(lbl_peso_cap)
+        peso_v.addWidget(lbl_peso)
+
+        ped_h.addWidget(carga_w, 1)
+        ped_h.addWidget(peso_w)
+        v.addLayout(ped_h)
+
+        # ── Linha 6: badge de status + usuário + botão editar ────────
+        bot_h = QHBoxLayout(); bot_h.setSpacing(6)
+
+        st_display = status_txt or "AGUARDANDO"
         if inativo and obs_txt:
-            st_txt = f"{status_txt}: {obs_txt}"
-        else:
-            st_txt = status_txt or "—"
-        st_badge = QLabel(st_txt)
-        st_badge.setStyleSheet(f"""
-            color: {st_cor}; background: transparent;
-            font-size: 10px; font-weight: 700; padding: 2px 4px;
+            st_display = f"{status_txt}: {obs_txt}"
+        lbl_status = QLabel(st_display)
+        lbl_status.setStyleSheet(f"""
+            color: {cor_status};
+            background: {cor_status}18;
+            border: 1px solid {cor_status}44;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
         """)
-        st_badge.setMaximumWidth(180)
 
-        # Botão editar
+        usuario_txt = str(
+            r.get("usuario","") or r.get("dados",{}).get("_usuario","") or ""
+        ).upper()
+        lbl_usuario = QLabel(f"👤 {usuario_txt}" if usuario_txt else "")
+        lbl_usuario.setStyleSheet(
+            f"color: {MUTED}; font-size: 10px; background: transparent;"
+        )
+
         btn = QPushButton("EDITAR")
-        btn.setFixedHeight(28)
-        btn.setFixedWidth(80)
-        btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        btn.setFixedHeight(26)
+        btn.setFixedWidth(70)
         btn.setFont(QFont("Segoe UI", 9, QFont.Bold))
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent; border: 1px solid #e3b341;
                 border-radius: 5px; color: #e3b341; font-weight: 700;
-                padding: 0px 8px;
+                padding: 0px 6px;
             }}
             QPushButton:hover {{ background: #e3b34122; }}
         """)
         btn.clicked.connect(lambda _, reg=r: self._reeditar_ordem(reg))
 
-        usuario_txt = str(r.get("usuario","") or r.get("dados",{}).get("_usuario","") or "").upper()
+        bot_h.addWidget(lbl_status)
+        bot_h.addStretch()
+        bot_h.addWidget(lbl_usuario)
+        bot_h.addWidget(btn)
+        v.addLayout(bot_h)
 
-        mot_w = QWidget(); mot_w.setStyleSheet("background:transparent;")
-        mot_w.setMaximumWidth(180)
-        mot_v = QVBoxLayout(mot_w); mot_v.setSpacing(1); mot_v.setContentsMargins(0,0,0,0)
-        mot_v.addWidget(mot_lbl); mot_v.addWidget(pla_lbl)
-
-        h.addLayout(num_col)
-        h.addWidget(mot_w, 1)
-        h.addWidget(_info("CLIENTE",  cliente_txt, 140), 0)
-        h.addWidget(_info("PEDIDO",   pedido_txt,   70), 0)
-        h.addWidget(_info("DESTINO",  destino_txt, 120), 0)
-        h.addWidget(_info("USUARIO",  usuario_txt,  70), 0)
-        h.addStretch(1)
-        h.addWidget(badge)
-        h.addWidget(st_badge)
-        h.addSpacing(6)
-        h.addWidget(btn)
-
-        return r, frame
+        return frame
 
     def _reeditar_ordem(self, r):
         """Carrega dados no formulário para reeditar. Suporta Supabase e local."""
@@ -859,6 +1053,190 @@ class HistoricoWidget(QWidget):
             except Exception:
                 pass
 
+    def _reeditar_ordem(self, r):
+        """Carrega dados no formulário para reeditar. Suporta Supabase e local."""
+        dados = r.get("dados")
+        sb_id = r.get("id") or r.get("supabase_id")
+
+        # Se veio do Supabase sem dados completos, busca no histórico local pelo supabase_id
+        if not dados and sb_id:
+            historico_local = carregar_historico()
+            for reg in historico_local:
+                if str(reg.get("supabase_id","")) == str(sb_id) and reg.get("dados"):
+                    dados = reg["dados"]
+                    break
+
+        # Se ainda não tem dados, monta o básico do que o Supabase tem
+        if not dados and r.get("motorista"):
+            filial = str(r.get("filial","") or "").upper()
+            dados = {
+                "empresa":    "Agrovia" if "AGRO" in filial else "TopBrasil",
+                "Motorista":  str(r.get("motorista","") or ""),
+                "Cavalo":     str(r.get("placa","") or ""),
+                "Pagador":    str(r.get("pagador","") or ""),
+                "Cliente":    str(r.get("cliente","") or r.get("pagador","") or ""),
+                "Fábrica":    str(r.get("fabrica","") or ""),
+                "Destino":    str(r.get("destino","") or ""),
+                "UF":         str(r.get("uf","") or ""),
+                "Pedido":     str(r.get("pedido","") or ""),
+                "Produto":    str(r.get("produto","") or ""),
+                "Embalagem":  str(r.get("embalagem","") or ""),
+                "Colocador":    str(r.get("colocador","") or ""),
+                "Pagamento":    str(r.get("pagamento","") or ""),
+                "Frete/Emp":    str(r.get("frete_emp","") or ""),
+                "Frete/Mot":    str(r.get("frete_mot","") or ""),
+                "Rota":         str(r.get("rota","") or ""),
+                "Agenciamento": str(r.get("agenciamento","") or ""),
+                "Agência":      str(r.get("agencia","") or ""),
+                "Origem":       str(r.get("origem","") or ""),
+                "CPF":          str(r.get("cpf","") or ""),
+                "Contato":      str(r.get("contato","") or ""),
+                "Carroceria":   str(r.get("carroceria","") or ""),
+                "Carreta 1":    str(r.get("carreta1","") or ""),
+                "Carreta 2":    str(r.get("carreta2","") or ""),
+                "Carreta 3":    str(r.get("carreta3","") or ""),
+                "Fazenda":      str(r.get("fazenda","") or ""),
+                "Solicitante":  str(r.get("solicitante","") or ""),
+                "Peso Total":   str(r.get("peso","") or ""),
+                "_num_pedidos":  sum(1 for k in ["pedido","pedido2","pedido3","pedido4"] if r.get(k)),
+                "Peso":         str(r.get("peso1","") or r.get("peso","") or ""),
+                "Peso 2":       str(r.get("peso2","") or ""),
+                "Peso 3":       str(r.get("peso3","") or ""),
+                "Peso 4":       str(r.get("peso4","") or ""),
+                "Pedido 2":     str(r.get("pedido2","") or ""),
+                "Produto 2":    str(r.get("produto2","") or ""),
+                "Embalagem 2":  str(r.get("embalagem2","") or ""),
+                "Pedido 3":     str(r.get("pedido3","") or ""),
+                "Produto 3":    str(r.get("produto3","") or ""),
+                "Embalagem 3":  str(r.get("embalagem3","") or ""),
+                "Pedido 4":     str(r.get("pedido4","") or ""),
+                "Produto 4":    str(r.get("produto4","") or ""),
+                "Embalagem 4":  str(r.get("embalagem4","") or ""),
+            }
+
+        if not dados:
+            QMessageBox.warning(self, "Aviso",
+                "Este registro nao possui dados completos para reeditar.")
+            return
+
+        arquivo_antigo = r.get("arquivo","")
+        arquivo_xlsx   = arquivo_antigo if arquivo_antigo and arquivo_antigo.endswith(".xlsx") else ""
+        arquivo_pdf    = arquivo_xlsx.replace(".xlsx",".pdf") if arquivo_xlsx else ""
+
+        motorista   = dados.get("Motorista","")
+        placa       = dados.get("Cavalo","")
+        empresa_orig = dados.get("empresa","")
+        emp_norm     = "Agrovia" if "AGRO" in str(empresa_orig).upper() else "TopBrasil"
+        cor_emp      = "#238636" if emp_norm == "Agrovia" else "#da3633"
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Editar Ordem")
+        dlg.setFixedSize(440, 240)
+        dlg.setStyleSheet(DIALOG_SS)
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(24, 20, 24, 20)
+        lay.setSpacing(10)
+
+        lbl = QLabel(f"Editar ordem de <b>{motorista.title()}</b> — placa <b>{placa}</b>")
+        lbl.setWordWrap(True)
+        lay.addWidget(lbl)
+
+        lbl_emp = QLabel(f"Empresa atual: <b style='color:{cor_emp}'>{emp_norm.upper()}</b>")
+        lbl_emp.setStyleSheet("background: transparent;")
+        lbl_emp.setWordWrap(True)
+        lay.addWidget(lbl_emp)
+
+        lbl2 = QLabel("Uma nova ordem sera gerada e a anterior marcada como ALTERADO.")
+        lbl2.setStyleSheet(f"color: #e3b341; font-size: 11px; background: transparent;")
+        lbl2.setWordWrap(True)
+        lay.addWidget(lbl2)
+
+        # Seleção de empresa para nova ordem
+        lbl3 = QLabel("Empresa da nova ordem:")
+        lbl3.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent;")
+        lay.addWidget(lbl3)
+
+        emp_btns = QHBoxLayout(); emp_btns.setSpacing(8)
+        btn_agro = QPushButton("AGROVIA")
+        btn_top  = QPushButton("TOPBRASIL")
+        for b in [btn_agro, btn_top]:
+            b.setFixedHeight(32)
+            b.setCheckable(True)
+            b.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent; border: 1px solid {BORDER2};
+                    border-radius: 6px; color: {MUTED}; font-size: 11px; font-weight: 700;
+                }}
+                QPushButton:checked {{ border-color: #238636; color: #238636; background: #23863622; }}
+            """)
+        btn_top.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; border: 1px solid {BORDER2};
+                border-radius: 6px; color: {MUTED}; font-size: 11px; font-weight: 700;
+            }}
+            QPushButton:checked {{ border-color: #da3633; color: #da3633; background: #da363322; }}
+        """)
+        # Pré-selecionar empresa atual
+        if emp_norm == "Agrovia":
+            btn_agro.setChecked(True)
+        else:
+            btn_top.setChecked(True)
+
+        def _sel_agro():
+            btn_agro.setChecked(True)
+            btn_top.setChecked(False)
+        def _sel_top():
+            btn_top.setChecked(True)
+            btn_agro.setChecked(False)
+        btn_agro.clicked.connect(_sel_agro)
+        btn_top.clicked.connect(_sel_top)
+
+        emp_btns.addWidget(btn_agro)
+        emp_btns.addWidget(btn_top)
+        lay.addLayout(emp_btns)
+
+        btns = QHBoxLayout()
+        bc = QPushButton("CANCELAR"); bc.setObjectName("btn_cancel")
+        bo = QPushButton("CONTINUAR"); bo.setObjectName("btn_ok")
+        btns.addWidget(bc); btns.addWidget(bo)
+        lay.addLayout(btns)
+        bc.clicked.connect(dlg.reject)
+
+        def continuar():
+            dlg.accept()
+            empresa_nova = "Agrovia" if btn_agro.isChecked() else "TopBrasil"
+            dados["empresa"] = empresa_nova
+
+            ui = None
+            w = self.parent()
+            while w:
+                if hasattr(w, "_nav") and hasattr(w, "_preencher_campos"):
+                    ui = w; break
+                w = w.parent() if hasattr(w, "parent") else None
+            if ui is None:
+                QMessageBox.warning(self, "Aviso", "Nao foi possivel navegar para o formulario.")
+                return
+            if hasattr(ui, "_aplicar_empresa"):
+                ui._aplicar_empresa(empresa_nova)
+            ui._preencher_campos(dados)
+            ui._nav(0)
+            if sb_id and hasattr(ui, "_entrar_modo_edicao"):
+                ui._entrar_modo_edicao(sb_id)
+            if arquivo_xlsx:
+                ui._arquivos_para_deletar = [arquivo_xlsx, arquivo_pdf]
+
+        bo.clicked.connect(continuar)
+        dlg.exec()
+
+    def _abrir_arquivo(self, caminho):
+        import subprocess
+        try:
+            os.startfile(caminho)
+        except Exception:
+            try:
+                subprocess.run(["explorer", "/select,", caminho])
+            except Exception:
+                pass
 
 class PlanilhaWidget(QWidget):
     def __init__(self, parent=None):
