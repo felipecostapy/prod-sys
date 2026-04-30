@@ -3018,8 +3018,95 @@ class UI(QWidget):
         r.addWidget(make_field("CPF", self.entradas["CPF"]), 1)
         r.addWidget(make_field("Contato", self.entradas["Contato"]), 1)
         v.addLayout(r)
-        v.addStretch(1)
 
+        # ── Buonny ───────────────────────────────────────────────────
+        buonny_inp = QLineEdit()
+        buonny_inp.setMinimumHeight(32)
+        buonny_inp.setPlaceholderText("000000000-0000")
+        buonny_inp.setMaxLength(14)  # 9 + 1 traço + 4
+        buonny_inp.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {SURFACE};
+                border: 1px solid {BORDER2};
+                border-radius: 6px;
+                padding: 8px 10px;
+                color: {TEXT};
+                font-size: 13px;
+                letter-spacing: 0.5px;
+            }}
+            QLineEdit:focus {{ border-color: {ACCENT}; background-color: #1c2128; }}
+        """)
+        self.entradas["Buonny"] = buonny_inp
+
+        # Formata automaticamente: digita apenas números,
+        # insere o traço ao chegar no 10º caractere
+        def _formatar_buonny(texto):
+            buonny_inp.blockSignals(True)
+            pos = buonny_inp.cursorPosition()
+            apenas_nums = re.sub(r"\D", "", texto)[:13]  # máx 9+4 dígitos
+            if len(apenas_nums) > 9:
+                formatado = apenas_nums[:9] + "-" + apenas_nums[9:]
+            else:
+                formatado = apenas_nums
+            buonny_inp.setText(formatado)
+            # Reposiciona cursor de forma natural
+            nova_pos = min(pos, len(formatado))
+            buonny_inp.setCursorPosition(nova_pos)
+            buonny_inp.blockSignals(False)
+            _validar_buonny(formatado)
+
+        def _validar_buonny(texto):
+            """Borda vermelha se preenchido mas fora do padrão."""
+            if not texto:
+                buonny_inp.setStyleSheet(f"""
+                    QLineEdit {{
+                        background-color: {SURFACE};
+                        border: 1px solid {BORDER2};
+                        border-radius: 6px;
+                        padding: 8px 10px;
+                        color: {TEXT};
+                        font-size: 13px;
+                        letter-spacing: 0.5px;
+                    }}
+                    QLineEdit:focus {{ border-color: {ACCENT}; background-color: #1c2128; }}
+                """)
+                return
+            valido = bool(re.fullmatch(r"\d{9}-\d{4}", texto))
+            cor_borda = ACCENT if valido else DANGER
+            buonny_inp.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {SURFACE};
+                    border: 1px solid {cor_borda};
+                    border-radius: 6px;
+                    padding: 8px 10px;
+                    color: {TEXT};
+                    font-size: 13px;
+                    letter-spacing: 0.5px;
+                }}
+                QLineEdit:focus {{ border-color: {cor_borda}; background-color: #1c2128; }}
+            """)
+
+        buonny_inp.textChanged.connect(_formatar_buonny)
+
+        # Rótulo com indicação obrigatória
+        buonny_lbl_w = QWidget()
+        buonny_lbl_w.setStyleSheet("background: transparent;")
+        buonny_lbl_v = QVBoxLayout(buonny_lbl_w)
+        buonny_lbl_v.setContentsMargins(0, 0, 0, 0)
+        buonny_lbl_v.setSpacing(1)
+        lbl_top = QHBoxLayout()
+        lbl_txt = QLabel("BUONNY")
+        lbl_txt.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
+        lbl_obrig = QLabel("● OBRIGATÓRIO")
+        lbl_obrig.setStyleSheet(f"color: {DANGER}; font-size: 8px; font-weight: 700; background: transparent;")
+        lbl_top.addWidget(lbl_txt)
+        lbl_top.addWidget(lbl_obrig)
+        lbl_top.addStretch()
+        buonny_lbl_v.addLayout(lbl_top)
+        buonny_lbl_v.addWidget(buonny_inp)
+        v.addWidget(buonny_lbl_w)
+
+        v.addStretch(1)
         return frame
 
     def _build_carga(self):
@@ -3564,6 +3651,13 @@ class UI(QWidget):
         if not dados.get("Cavalo"):
             erros.append("• Cavalo (Placa)")
 
+        # Buonny obrigatório no padrão xxxxxxxxx-xxxx
+        buonny_val = dados.get("Buonny", "").strip()
+        if not buonny_val:
+            erros.append("• Buonny (obrigatório)")
+        elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+            erros.append("• Buonny (formato inválido — use 000000000-0000)")
+
         # Carroceria obrigatória
         carroceria = dados.get("Carroceria", "").strip()
         if not carroceria:
@@ -3623,6 +3717,11 @@ class UI(QWidget):
         erros = []
         if not dados.get("Motorista"): erros.append("Motorista")
         if not dados.get("Cavalo"):    erros.append("Placa")
+        buonny_val = dados.get("Buonny", "").strip()
+        if not buonny_val:
+            erros.append("Buonny (obrigatório)")
+        elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+            erros.append("Buonny (formato inválido — use 000000000-0000)")
         if erros:
             QMessageBox.warning(self, "Campos obrigatorios",
                 "Preencha: " + " | ".join(erros))
