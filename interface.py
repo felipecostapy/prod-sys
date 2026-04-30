@@ -3042,16 +3042,33 @@ class UI(QWidget):
         # insere o traço ao chegar no 10º caractere
         def _formatar_buonny(texto):
             buonny_inp.blockSignals(True)
-            pos = buonny_inp.cursorPosition()
+            cursor_antes = buonny_inp.cursorPosition()
+
             apenas_nums = re.sub(r"\D", "", texto)[:13]  # máx 9+4 dígitos
             if len(apenas_nums) > 9:
                 formatado = apenas_nums[:9] + "-" + apenas_nums[9:]
             else:
                 formatado = apenas_nums
-            buonny_inp.setText(formatado)
-            # Reposiciona cursor de forma natural
-            nova_pos = min(pos, len(formatado))
-            buonny_inp.setCursorPosition(nova_pos)
+
+            # Se o texto já está exatamente como seria formatado, não reescreve
+            # (evita loop e inversão de dígitos ao digitar após o hífen)
+            if texto != formatado:
+                buonny_inp.setText(formatado)
+                # Recalcula posição: conta quantos dígitos havia antes do cursor,
+                # depois localiza esse mesmo dígito no texto formatado
+                digitos_antes_cursor = len(re.sub(r"\D", "", texto[:cursor_antes]))
+                nova_pos = 0
+                contados = 0
+                for i, ch in enumerate(formatado):
+                    if contados == digitos_antes_cursor:
+                        nova_pos = i
+                        break
+                    if ch.isdigit():
+                        contados += 1
+                else:
+                    nova_pos = len(formatado)
+                buonny_inp.setCursorPosition(nova_pos)
+
             buonny_inp.blockSignals(False)
             _validar_buonny(formatado)
 
@@ -4305,14 +4322,30 @@ class UI(QWidget):
     def _preencher_campos(self, dados):
 
         num_pedidos = dados.get("_num_pedidos", 1)
+
+        # ── Limpa TODAS as linhas de pedido antes de qualquer coisa ──
+        # Evita que valores da ordem anterior persistam nas linhas 2/3/4
+        for i, (stack, linha) in enumerate(self._pedido_linhas):
+            for inp in linha.values():
+                if isinstance(inp, QLineEdit):
+                    inp.clear()
+                elif isinstance(inp, QComboBox):
+                    inp.setCurrentIndex(-1)
+            # Retorna todas para o estado de botão; ativas serão reativadas abaixo
+            stack.setCurrentIndex(0)
+        # Primeira linha sempre ativa
+        if self._pedido_linhas:
+            self._pedido_linhas[0][0].setCurrentIndex(1)
+
+        # Adiciona linhas extras se necessário
         while len(self._pedido_linhas) < num_pedidos:
-            self._adicionar_linha_pedido()
+            self._adicionar_linha_pedido(ativa=False)
 
         campos_simples = ["Fábrica", "Cliente", "Fazenda", "Origem",
                           "Destino", "Motorista", "Cavalo", "Pagador",
                           "Solicitante", "Agência", "UF", "Frete/Emp", "Frete/Mot",
                           "Rota", "Agenciamento", "Colocador", "Pagamento",
-                          "Peso Total", "CPF", "Contato", "Carroceria",
+                          "Peso Total", "CPF", "Contato", "Buonny", "Carroceria",
                           "Carreta 1", "Carreta 2", "Carreta 3",
                           "Peso", "Peso 2", "Peso 3", "Peso 4"]
 
