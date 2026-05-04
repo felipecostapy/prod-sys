@@ -289,6 +289,7 @@ def _deletar_supabase_linha(sb_id):
 
 _assinaturas_supabase = {}
 _senhas_supabase      = {}
+_permissoes_supabase  = {}   # {USUARIO: {"buonny_livre": bool, ...}}
 
 USUARIOS = {
     "FELIPE":   "Felipe Costa",
@@ -325,7 +326,9 @@ def carregar_usuarios():
     try:
         import urllib.request as _ureq
         req = _ureq.Request(
-            f"{SUPABASE_URL}/rest/v1/usuarios?select=usuario,nome,assinatura,senha&order=usuario.asc",
+            f"{SUPABASE_URL}/rest/v1/usuarios"
+            f"?select=usuario,nome,assinatura,senha,buonny_livre"
+            f"&order=usuario.asc",
             headers={
                 "apikey":        SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -334,13 +337,20 @@ def carregar_usuarios():
         with _ureq.urlopen(req, timeout=5) as r:
             rows = json.loads(r.read().decode("utf-8"))
         if rows:
-            global _assinaturas_supabase, _senhas_supabase
+            global _assinaturas_supabase, _senhas_supabase, _permissoes_supabase
             _assinaturas_supabase = {
                 str(r["usuario"]).upper(): str(r.get("assinatura") or r.get("nome") or r["usuario"])
                 for r in rows
             }
             _senhas_supabase = {
                 str(r["usuario"]).upper(): str(r.get("senha") or "")
+                for r in rows
+            }
+            # buonny_livre: True = pode gerar sem Buonny
+            _permissoes_supabase = {
+                str(r["usuario"]).upper(): {
+                    "buonny_livre": bool(r.get("buonny_livre", False)),
+                }
                 for r in rows
             }
             return {str(r["usuario"]).upper(): str(r.get("nome") or r["usuario"]) for r in rows}
@@ -3118,8 +3128,9 @@ class UI(QWidget):
         lbl_top = QHBoxLayout()
         lbl_txt = QLabel("BUONNY")
         lbl_txt.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
-        lbl_obrig = QLabel("● OBRIGATÓRIO")
+        lbl_obrig = QLabel("● OBRIGATÓRIO*")
         lbl_obrig.setStyleSheet(f"color: {DANGER}; font-size: 8px; font-weight: 700; background: transparent;")
+        lbl_obrig.setToolTip("* Obrigatório salvo para usuários com permissão especial")
         lbl_top.addWidget(lbl_txt)
         lbl_top.addWidget(lbl_obrig)
         lbl_top.addStretch()
@@ -3510,6 +3521,14 @@ class UI(QWidget):
         self.btn1.setStyleSheet(f"background-color: {cor}; color: white; border: none;")
         self._atualizar_fundo(nome)
 
+    def _tem_permissao(self, permissao: str) -> bool:
+        """Retorna True se o usuário logado tem a permissão indicada.
+        Permissões controladas no Supabase — coluna booleana na tabela usuarios.
+        Ex.: buonny_livre = True  →  pode gerar ordem sem Buonny.
+        """
+        chave = (self.usuario_logado or "").upper()
+        return bool(_permissoes_supabase.get(chave, {}).get(permissao, False))
+
     def _pedir_empresa(self):
         """Dialog compacto para escolher Agrovia ou TopBrasil antes de gerar."""
         dlg = QDialog(self)
@@ -3790,11 +3809,15 @@ class UI(QWidget):
         if not dados.get("Cavalo"):
             erros.append("• Cavalo (Placa)")
 
-        # Buonny obrigatório no padrão xxxxxxxxx-xxxx
+        # Buonny — obrigatório salvo se usuário tem permissão buonny_livre
         buonny_val = dados.get("Buonny", "").strip()
-        if not buonny_val:
-            erros.append("• Buonny (obrigatório)")
-        elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+        if not self._tem_permissao("buonny_livre"):
+            if not buonny_val:
+                erros.append("• Buonny (obrigatório)")
+            elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+                erros.append("• Buonny (formato inválido — use 000000000-0000)")
+        elif buonny_val and not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+            # Tem permissão mas digitou algo — valida o formato mesmo assim
             erros.append("• Buonny (formato inválido — use 000000000-0000)")
 
         # Carroceria obrigatória
@@ -3861,9 +3884,12 @@ class UI(QWidget):
         if not dados.get("Motorista"): erros.append("Motorista")
         if not dados.get("Cavalo"):    erros.append("Placa")
         buonny_val = dados.get("Buonny", "").strip()
-        if not buonny_val:
-            erros.append("Buonny (obrigatório)")
-        elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+        if not self._tem_permissao("buonny_livre"):
+            if not buonny_val:
+                erros.append("Buonny (obrigatório)")
+            elif not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
+                erros.append("Buonny (formato inválido — use 000000000-0000)")
+        elif buonny_val and not re.fullmatch(r"\d{9}-\d{4}", buonny_val):
             erros.append("Buonny (formato inválido — use 000000000-0000)")
         if erros:
             QMessageBox.warning(self, "Campos obrigatorios",
