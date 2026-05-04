@@ -288,6 +288,7 @@ def _deletar_supabase_linha(sb_id):
     urllib.request.urlopen(req, timeout=10)
 
 _assinaturas_supabase = {}
+_senhas_supabase      = {}
 
 USUARIOS = {
     "FELIPE":   "Felipe Costa",
@@ -324,7 +325,7 @@ def carregar_usuarios():
     try:
         import urllib.request as _ureq
         req = _ureq.Request(
-            f"{SUPABASE_URL}/rest/v1/usuarios?select=usuario,nome,assinatura&order=usuario.asc",
+            f"{SUPABASE_URL}/rest/v1/usuarios?select=usuario,nome,assinatura,senha&order=usuario.asc",
             headers={
                 "apikey":        SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -333,10 +334,13 @@ def carregar_usuarios():
         with _ureq.urlopen(req, timeout=5) as r:
             rows = json.loads(r.read().decode("utf-8"))
         if rows:
-            # Retorna {USUARIO: nome} e guarda assinatura em _assinaturas_supabase
-            global _assinaturas_supabase
+            global _assinaturas_supabase, _senhas_supabase
             _assinaturas_supabase = {
                 str(r["usuario"]).upper(): str(r.get("assinatura") or r.get("nome") or r["usuario"])
+                for r in rows
+            }
+            _senhas_supabase = {
+                str(r["usuario"]).upper(): str(r.get("senha") or "")
                 for r in rows
             }
             return {str(r["usuario"]).upper(): str(r.get("nome") or r["usuario"]) for r in rows}
@@ -3506,114 +3510,226 @@ class UI(QWidget):
         self.btn1.setStyleSheet(f"background-color: {cor}; color: white; border: none;")
         self._atualizar_fundo(nome)
 
+    def _pedir_empresa(self):
+        """Dialog compacto para escolher Agrovia ou TopBrasil antes de gerar."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Escolher Empresa")
+        dlg.setFixedSize(320, 160)
+        dlg.setStyleSheet(DIALOG_SS)
+        dlg.setWindowFlag(Qt.WindowCloseButtonHint, True)
+
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(28, 24, 28, 24)
+        lay.setSpacing(12)
+
+        lbl = QLabel("Para qual empresa é esta ordem?")
+        lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet(f"color: {MUTED}; font-size: 12px; background: transparent;")
+        lay.addWidget(lbl)
+
+        btn_a = QPushButton("AGROVIA")
+        btn_a.setMinimumHeight(40)
+        btn_a.setStyleSheet(f"""
+            QPushButton {{
+                background: #1a3a1a; color: #3fb950;
+                border: 1px solid #238636; border-radius: 8px;
+                font-size: 13px; font-weight: 800; letter-spacing: 1px;
+            }}
+            QPushButton:hover {{ background: #1e5c1e; }}
+        """)
+
+        btn_t = QPushButton("TOPBRASIL")
+        btn_t.setMinimumHeight(40)
+        btn_t.setStyleSheet(f"""
+            QPushButton {{
+                background: #3a0a0a; color: #f85149;
+                border: 1px solid #da3633; border-radius: 8px;
+                font-size: 13px; font-weight: 800; letter-spacing: 1px;
+            }}
+            QPushButton:hover {{ background: #5a1010; }}
+        """)
+
+        def _sel(nome):
+            self._aplicar_empresa(nome)
+            dlg.accept()
+
+        btn_a.clicked.connect(lambda: _sel("Agrovia"))
+        btn_t.clicked.connect(lambda: _sel("TopBrasil"))
+        lay.addWidget(btn_a)
+        lay.addWidget(btn_t)
+        dlg.exec()
+
     def escolher_empresa(self):
-        usuarios = carregar_usuarios()
+        usuarios  = carregar_usuarios()   # {USUARIO: nome}
         is_primeiro_login = not self.usuario_logado
 
         dlg = QDialog(self)
         dlg.setWindowTitle("Sistema de Ordens")
-        dlg.setFixedSize(360, is_primeiro_login and 360 or 240)
+        dlg.setWindowFlag(Qt.WindowCloseButtonHint, not is_primeiro_login)
+        dlg.setFixedSize(360, 320 if is_primeiro_login else 160)
         dlg.setStyleSheet(DIALOG_SS)
-        dlg.setWindowFlag(Qt.WindowCloseButtonHint, is_primeiro_login is False)
 
         lay = QVBoxLayout(dlg)
-        lay.setContentsMargins(28, 24, 28, 24)
-        lay.setSpacing(10)
+        lay.setContentsMargins(32, 28, 32, 28)
+        lay.setSpacing(0)
 
-        # ── Título ──
-        titulo = QLabel("SISTEMA DE ORDENS")
-        titulo.setAlignment(Qt.AlignCenter)
-        titulo.setStyleSheet(f"color: {TEXT}; font-size: 15px; font-weight: 700; letter-spacing: 1.5px; background: transparent;")
-        lay.addWidget(titulo)
-
-        subtitulo = QLabel("Sistema de Ordens de Carregamento")
-        subtitulo.setAlignment(Qt.AlignCenter)
-        subtitulo.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent;")
-        lay.addWidget(subtitulo)
-        lay.addSpacing(4)
-
-        # ── Seção de login (só na primeira vez) ──
+        # ── Logo / título ──────────────────────────────────────────
         if is_primeiro_login:
-            sep1 = QFrame(); sep1.setFrameShape(QFrame.HLine)
-            sep1.setStyleSheet(f"color: {BORDER}; background: {BORDER}; max-height: 1px;")
-            lay.addWidget(sep1)
+            lbl_titulo = QLabel("SISTEMA DE ORDENS")
+            lbl_titulo.setAlignment(Qt.AlignCenter)
+            lbl_titulo.setStyleSheet(
+                f"color: {TEXT}; font-size: 15px; font-weight: 800; "
+                f"letter-spacing: 2px; background: transparent;"
+            )
+            lay.addWidget(lbl_titulo)
 
-            lbl_usuario = QLabel("USUÁRIO")
-            lbl_usuario.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
-            lay.addWidget(lbl_usuario)
+            lbl_sub = QLabel("Ordens de Carregamento")
+            lbl_sub.setAlignment(Qt.AlignCenter)
+            lbl_sub.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent;")
+            lay.addWidget(lbl_sub)
+            lay.addSpacing(22)
+
+            # ── Campo usuário ──────────────────────────────────────
+            lbl_u = QLabel("USUÁRIO")
+            lbl_u.setStyleSheet(
+                f"color: {MUTED}; font-size: 9px; font-weight: 700; "
+                f"letter-spacing: 1px; background: transparent;"
+            )
+            lay.addWidget(lbl_u)
+            lay.addSpacing(4)
 
             combo_usuario = QComboBox()
             combo_usuario.setEditable(True)
             combo_usuario.addItems(sorted(usuarios.keys()))
             combo_usuario.setCurrentIndex(-1)
-            combo_usuario.lineEdit().setPlaceholderText("Selecione ou digite seu nome...")
+            combo_usuario.lineEdit().setPlaceholderText("Seu usuário...")
             combo_usuario.setMinimumHeight(36)
             comp = QCompleter(sorted(usuarios.keys()))
             comp.setCaseSensitivity(Qt.CaseInsensitive)
             combo_usuario.setCompleter(comp)
             lay.addWidget(combo_usuario)
+            lay.addSpacing(12)
 
+            # ── Campo senha ────────────────────────────────────────
+            lbl_s = QLabel("SENHA")
+            lbl_s.setStyleSheet(
+                f"color: {MUTED}; font-size: 9px; font-weight: 700; "
+                f"letter-spacing: 1px; background: transparent;"
+            )
+            lay.addWidget(lbl_s)
+            lay.addSpacing(4)
+
+            inp_senha = QLineEdit()
+            inp_senha.setEchoMode(QLineEdit.Password)
+            inp_senha.setPlaceholderText("Sua senha...")
+            inp_senha.setMinimumHeight(36)
+            inp_senha.setStyleSheet(f"""
+                QLineEdit {{
+                    background: {SURFACE};
+                    border: 1px solid {BORDER2};
+                    border-radius: 6px;
+                    padding: 8px 12px;
+                    color: {TEXT};
+                    font-size: 13px;
+                }}
+                QLineEdit:focus {{ border-color: {ACCENT}; }}
+            """)
+            lay.addWidget(inp_senha)
+            lay.addSpacing(6)
+
+            # ── Mensagem de erro ───────────────────────────────────
             lbl_erro = QLabel("")
             lbl_erro.setAlignment(Qt.AlignCenter)
             lbl_erro.setStyleSheet(f"color: {DANGER}; font-size: 11px; background: transparent;")
             lay.addWidget(lbl_erro)
-            lay.addSpacing(4)
+            lay.addSpacing(10)
 
-        # ── Separador empresa ──
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.HLine)
-        sep2.setStyleSheet(f"color: {BORDER}; background: {BORDER}; max-height: 1px;")
-        lay.addWidget(sep2)
+            # ── Botão entrar ───────────────────────────────────────
+            btn_entrar = QPushButton("ENTRAR")
+            btn_entrar.setMinimumHeight(42)
+            btn_entrar.setStyleSheet(f"""
+                QPushButton {{
+                    background: {ACCENT};
+                    color: #0d1117;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 800;
+                    letter-spacing: 1px;
+                }}
+                QPushButton:hover {{ background: {ACCENT_H}; }}
+                QPushButton:pressed {{ background: {ACCENT_L}; }}
+            """)
+            lay.addWidget(btn_entrar)
 
-        lbl_emp = QLabel("EMPRESA")
-        lbl_emp.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
-        lay.addWidget(lbl_emp)
+            import unicodedata as _ud
+            def _norm(s):
+                return _ud.normalize("NFD", s.upper().strip()).encode("ascii","ignore").decode()
 
-        btn_a = QPushButton("AGROVIA")
-        btn_a.setObjectName("btn_agro")
-        btn_a.setMinimumHeight(42)
-
-        btn_t = QPushButton("TOPBRASIL")
-        btn_t.setObjectName("btn_top")
-        btn_t.setMinimumHeight(42)
-
-        def sel(nome_empresa):
-            if is_primeiro_login:
-                import unicodedata as _ud
-                def _norm(s):
-                    return _ud.normalize("NFD", s.upper().strip()).encode("ascii","ignore").decode()
+            def _tentar_login():
                 login = combo_usuario.currentText().strip()
+                senha = inp_senha.text().strip()
                 login_norm = _norm(login)
-                if not login_norm or login_norm not in [_norm(k) for k in usuarios.keys()]:
-                    lbl_erro.setText("⚠  Selecione um usuário válido.")
+                nomes_norm = [_norm(k) for k in usuarios.keys()]
+
+                if not login_norm or login_norm not in nomes_norm:
+                    lbl_erro.setText("⚠  Usuário não encontrado.")
                     combo_usuario.setFocus()
                     return
-                # Encontra a chave ignorando acentos e case
+
                 chave_real = next(k for k in usuarios if _norm(k) == login_norm)
+                senha_correta = _senhas_supabase.get(chave_real.upper(), "")
+
+                if senha_correta and senha != senha_correta:
+                    lbl_erro.setText("⚠  Senha incorreta.")
+                    inp_senha.setFocus()
+                    inp_senha.selectAll()
+                    return
+
+                # Login OK
                 self.usuario_logado     = chave_real
-                # Usa assinatura do Supabase se disponível, senão usa o nome do dict local
-                self.assinatura_usuario = _assinaturas_supabase.get(chave_real.upper()) or usuarios[chave_real]
-                # Preenche o campo assinatura
+                self.assinatura_usuario = (
+                    _assinaturas_supabase.get(chave_real.upper())
+                    or usuarios[chave_real]
+                )
                 if "Assinatura" in self.entradas:
                     self.entradas["Assinatura"].setText(self.assinatura_usuario)
 
-            self.empresa = nome_empresa
-            cor = ACCENT if nome_empresa == "Agrovia" else DANGER
-            self.btn1.setStyleSheet(f"background-color: {cor}; color: white; border: none;")
-            self._atualizar_fundo(nome_empresa)
-            dlg.accept()
+                dlg.accept()
 
-        btn_a.clicked.connect(lambda: sel("Agrovia"))
-        btn_t.clicked.connect(lambda: sel("TopBrasil"))
+            btn_entrar.clicked.connect(_tentar_login)
+            inp_senha.returnPressed.connect(_tentar_login)
+            combo_usuario.lineEdit().returnPressed.connect(lambda: inp_senha.setFocus())
 
-        lay.addWidget(btn_a)
-        lay.addWidget(btn_t)
+        else:
+            # Já logado — só mostra quem está logado e fecha
+            lbl = QLabel(f"👤  {self.assinatura_usuario}")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet(f"color: {TEXT}; font-size: 13px; background: transparent;")
+            lay.addWidget(lbl)
+            lay.addSpacing(8)
 
-        # Se já logado, mostra quem está logado no rodapé
-        if not is_primeiro_login:
-            lbl_logado = QLabel(f"👤  {self.assinatura_usuario}")
-            lbl_logado.setAlignment(Qt.AlignCenter)
-            lbl_logado.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent; margin-top: 4px;")
-            lay.addWidget(lbl_logado)
+            lbl_sub = QLabel("Clique em continuar para prosseguir.")
+            lbl_sub.setAlignment(Qt.AlignCenter)
+            lbl_sub.setStyleSheet(f"color: {MUTED}; font-size: 11px; background: transparent;")
+            lay.addWidget(lbl_sub)
+            lay.addSpacing(16)
+
+            btn_ok = QPushButton("CONTINUAR")
+            btn_ok.setMinimumHeight(38)
+            btn_ok.setStyleSheet(f"""
+                QPushButton {{
+                    background: {ACCENT};
+                    color: #0d1117;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    font-weight: 800;
+                }}
+                QPushButton:hover {{ background: {ACCENT_H}; }}
+            """)
+            btn_ok.clicked.connect(dlg.accept)
+            lay.addWidget(btn_ok)
 
         dlg.exec()
 
@@ -3651,6 +3767,12 @@ class UI(QWidget):
         return dados
 
     def executar(self, email=False):
+        # ── Garante empresa selecionada ───────────────────────────
+        if not self.empresa:
+            self._pedir_empresa()
+            if not self.empresa:
+                return
+
         pasta = QFileDialog.getExistingDirectory(self, "Salvar em")
         if not pasta:
             return
@@ -3729,6 +3851,10 @@ class UI(QWidget):
 
     def _gravar_banco(self):
         """Grava os dados do formulário no Supabase sem gerar documento."""
+        if not self.empresa:
+            self._pedir_empresa()
+            if not self.empresa:
+                return
         from gerador import gravar_supabase
         dados = self.coletar()
         erros = []
@@ -4460,4 +4586,3 @@ if __name__ == "__main__":
     win = UI()
     win.show()
     sys.exit(app.exec())
-    
