@@ -918,6 +918,8 @@ class HistoricoWidget(QWidget):
                 "Agenciamento": str(r.get("agenciamento","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
+                "Roteiro":      str(r.get("roteiro","") or ""),
+                "Observação":   str(r.get("observacao","") or ""),
                 "CPF":          str(r.get("cpf","") or ""),
                 "Contato":      str(r.get("contato","") or ""),
                 "Carroceria":   str(r.get("carroceria","") or ""),
@@ -1103,6 +1105,8 @@ class HistoricoWidget(QWidget):
                 "Agenciamento": str(r.get("agenciamento","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
+                "Roteiro":      str(r.get("roteiro","") or ""),
+                "Observação":   str(r.get("observacao","") or ""),
                 "CPF":          str(r.get("cpf","") or ""),
                 "Contato":      str(r.get("contato","") or ""),
                 "Carroceria":   str(r.get("carroceria","") or ""),
@@ -3245,6 +3249,28 @@ class UI(QWidget):
         r3.addWidget(make_field("Peso Total", self.entradas["Peso Total"]), 1)
         v.addLayout(r3)
 
+        # Linha 4: Roteiro + Observação
+        r4 = QHBoxLayout(); r4.setSpacing(6)
+        self.entradas["Roteiro"] = make_input()
+        self.entradas["Observação"] = QTextEdit()
+        self.entradas["Observação"].setMinimumHeight(54)
+        self.entradas["Observação"].setMaximumHeight(54)
+        self.entradas["Observação"].setPlaceholderText("Observações...")
+        self.entradas["Observação"].setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {SURFACE};
+                border: 1px solid {BORDER2};
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: {TEXT};
+                font-size: 13px;
+            }}
+            QTextEdit:focus {{ border-color: {ACCENT}; }}
+        """)
+        r4.addWidget(make_field("Roteiro",    self.entradas["Roteiro"]),    1)
+        r4.addWidget(make_field("Observação", self.entradas["Observação"]), 2)
+        v.addLayout(r4)
+
         v.addStretch()
         return frame
 
@@ -3781,6 +3807,8 @@ class UI(QWidget):
                 dados[k] = v.currentText()
             elif isinstance(v, QDateEdit):
                 dados[k] = v.date().toString("dd/MM/yyyy")
+            elif isinstance(v, QTextEdit):
+                dados[k] = v.toPlainText()
             else:
                 dados[k] = v.text()
         return dados
@@ -4499,7 +4527,8 @@ class UI(QWidget):
                           "Rota", "Agenciamento", "Colocador", "Pagamento",
                           "Peso Total", "CPF", "Contato", "Buonny", "Carroceria",
                           "Carreta 1", "Carreta 2", "Carreta 3",
-                          "Peso", "Peso 2", "Peso 3", "Peso 4"]
+                          "Peso", "Peso 2", "Peso 3", "Peso 4",
+                          "Roteiro"]
 
         # Limpa todos os campos antes de preencher — evita dados da ordem anterior persistirem
         for campo in campos_simples:
@@ -4508,6 +4537,10 @@ class UI(QWidget):
                 w.clear()
             elif isinstance(w, QComboBox):
                 w.setCurrentIndex(-1)
+        # Limpa QTextEdit separadamente
+        obs_w = self.entradas.get("Observação")
+        if obs_w and isinstance(obs_w, QTextEdit):
+            obs_w.clear()
 
         for campo in campos_simples:
             valor = dados.get(campo, "")
