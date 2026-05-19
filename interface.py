@@ -1328,7 +1328,12 @@ class PlanilhaWidget(QWidget):
             }}
             QLineEdit:focus {{ border-color: {ACCENT}; }}
         """)
-        self._inp_busca_pedidos.textChanged.connect(self._filtrar_pedidos)
+        # Debounce — só filtra 300ms após parar de digitar
+        self._debounce_busca = QTimer()
+        self._debounce_busca.setSingleShot(True)
+        self._debounce_busca.setInterval(300)
+        self._debounce_busca.timeout.connect(self._executar_filtro_pedidos)
+        self._inp_busca_pedidos.textChanged.connect(lambda: self._debounce_busca.start())
         root.addWidget(self._inp_busca_pedidos)
 
         self._lbl_status = QLabel("")
@@ -1601,6 +1606,10 @@ class PlanilhaWidget(QWidget):
         except Exception as e:
             self._lbl_status.setText(f"Erro: {e}")
 
+    def _executar_filtro_pedidos(self):
+        texto = self._inp_busca_pedidos.text()
+        self._filtrar_pedidos(texto)
+
     def _filtrar_pedidos(self, texto):
         if not hasattr(self, '_todos_blocos'):
             return
@@ -1840,7 +1849,113 @@ class PlanilhaWidget(QWidget):
         btn_expand.clicked.connect(toggle)
         header.mousePressEvent = lambda e: toggle()
 
+        # ── BOTÃO GERAR ORDEM ──────────────────────
+        btn_gerar = QPushButton("📋  Gerar Ordem")
+        btn_gerar.setFixedHeight(30)
+        btn_gerar.setStyleSheet(f"""
+            QPushButton {{
+                background: {SURFACE};
+                border: 1px solid {ACCENT};
+                border-radius: 6px;
+                color: {ACCENT};
+                font-size: 11px;
+                font-weight: 700;
+                padding: 0 12px;
+                margin: 0 14px 10px 14px;
+            }}
+            QPushButton:hover {{
+                background: {ACCENT}22;
+            }}
+            QPushButton:disabled {{
+                border-color: {BORDER2};
+                color: {MUTED};
+                background: transparent;
+            }}
+        """)
+        btn_gerar.clicked.connect(lambda _, bloco=b, btn=btn_gerar: self._gerar_ordem_historico(bloco, btn))
+        v_outer.addWidget(btn_gerar)
+
         return outer, detalhe
+
+
+    def _gerar_ordem_historico(self, bloco, btn):
+        """Preenche os campos da aba principal com os dados do bloco e vai para a aba de nova ordem."""
+        try:
+            # Marca botão como processando
+            btn.setText("⏳  Carregando...")
+            btn.setEnabled(False)
+
+            # Procura a janela principal (MainWindow) para acessar as abas
+            main_win = None
+            w = self.parent()
+            while w:
+                if hasattr(w, '_tabs') or hasattr(w, 'tabs') or hasattr(w, '_form_widget'):
+                    main_win = w
+                    break
+                w = w.parent()
+
+            if not main_win:
+                # Tenta pegar pela aplicação
+                from PySide6.QtWidgets import QApplication
+                for widget in QApplication.topLevelWidgets():
+                    if hasattr(widget, '_form_widget') or hasattr(widget, '_tab_bar'):
+                        main_win = widget
+                        break
+
+            # Monta os dados para preencher
+            dados = {
+                "Cliente":    bloco.get("cliente", ""),
+                "Fazenda":    bloco.get("fazenda", ""),
+                "Pedido":     bloco.get("pedido", ""),
+                "Destino":    bloco.get("cidade", ""),
+                "Fábrica":    bloco.get("fabrica", ""),
+                "Produto":    bloco.get("produto", ""),
+            }
+
+            # Preenche os campos e muda para aba de nova ordem
+            if main_win and hasattr(main_win, '_preencher_campos'):
+                main_win._preencher_campos(dados)
+                # Tenta mudar para a aba de nova ordem (aba 0 geralmente)
+                if hasattr(main_win, '_tab_bar'):
+                    main_win._tab_bar.setCurrentIndex(0)
+                elif hasattr(main_win, 'tabs'):
+                    main_win.tabs.setCurrentIndex(0)
+                btn.setText("✓  Dados preenchidos")
+            else:
+                # Emite sinal com os dados para a janela principal tratar
+                from PySide6.QtCore import QCoreApplication
+                QCoreApplication.instance().postEvent(
+                    QCoreApplication.instance(),
+                    type('GerarOrdemEvent', (), {'dados': dados, 'bloco': bloco})()
+                )
+                btn.setText("✓  Enviado")
+
+            # Marca no Supabase como "ordem gerada" se tiver id
+            if bloco.get("id"):
+                self._marcar_ordem_gerada(bloco["id"])
+
+        except Exception as e:
+            btn.setText("✗  Erro")
+            btn.setEnabled(True)
+            import traceback; traceback.print_exc()
+
+    def _marcar_ordem_gerada(self, pedido_id):
+        """Marca o pedido como ordem_gerada no Supabase."""
+        try:
+            import urllib.request, json, os
+            url  = os.environ.get("SUPABASE_URL","")
+            key  = os.environ.get("SUPABASE_KEY","")
+            if not url or not key: return
+            req = urllib.request.Request(
+                f"{url}/rest/v1/pedidos?id=eq.{pedido_id}",
+                data=json.dumps({"ordem_gerada": True}).encode(),
+                headers={"apikey": key, "Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json", "Prefer": "return=minimal"},
+                method="PATCH"
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
 
 
 class BaseWidget(QWidget):
