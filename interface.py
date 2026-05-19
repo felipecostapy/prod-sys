@@ -1181,10 +1181,44 @@ class HistoricoWidget(QWidget):
             )
             if sb_id:
                 self._marcar_pdf_gerado(sb_id)
-            try:
-                os.startfile(caminho)
-            except Exception:
-                pass
+
+            # Abre o PDF (não o Excel)
+            pdf_path = caminho.replace(".xlsx", ".pdf")
+            arq_abrir = pdf_path if os.path.exists(pdf_path) else caminho
+
+            from PySide6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setWindowTitle("PDF Gerado")
+            msg.setText(f"PDF gerado com sucesso!")
+            msg.setInformativeText("Deseja abrir ou imprimir agora?")
+            btn_abrir    = msg.addButton("📄 Abrir PDF",    QMessageBox.AcceptRole)
+            btn_imprimir = msg.addButton("🖨 Imprimir",     QMessageBox.ActionRole)
+            btn_fechar   = msg.addButton("Fechar",          QMessageBox.RejectRole)
+            msg.setDefaultButton(btn_abrir)
+            msg.exec()
+
+            clicado = msg.clickedButton()
+            if clicado == btn_abrir:
+                try:
+                    os.startfile(arq_abrir)
+                except Exception:
+                    pass
+            elif clicado == btn_imprimir:
+                try:
+                    import subprocess
+                    subprocess.Popen(
+                        ["rundll32.exe", "mshtml.dll,PrintHTML", arq_abrir]
+                        if arq_abrir.endswith(".html") else
+                        ["AcroRd32.exe", "/p", "/h", arq_abrir],
+                        shell=True
+                    )
+                except Exception:
+                    # Fallback — imprime via ShellExecute
+                    try:
+                        import win32api
+                        win32api.ShellExecute(0, "print", arq_abrir, None, ".", 0)
+                    except Exception:
+                        os.startfile(arq_abrir, "print")
 
         def on_erro(msg):
             btn.setEnabled(True)
