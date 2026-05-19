@@ -403,7 +403,12 @@ class HistoricoWidget(QWidget):
             }}
             QLineEdit:focus {{ border-color: {ACCENT}; }}
         """)
-        self._inp_busca.textChanged.connect(self._filtrar)
+        # Debounce — só filtra 300ms após parar de digitar
+        self._debounce_hist = QTimer()
+        self._debounce_hist.setSingleShot(True)
+        self._debounce_hist.setInterval(300)
+        self._debounce_hist.timeout.connect(lambda: self._filtrar(self._inp_busca.text()))
+        self._inp_busca.textChanged.connect(lambda: self._debounce_hist.start())
         self._btn_att = QPushButton("↺  ATUALIZAR")
         self._btn_att.setStyleSheet(f"""
             QPushButton {{
@@ -874,9 +879,43 @@ class HistoricoWidget(QWidget):
         """)
         btn.clicked.connect(lambda _, reg=r: self._reeditar_ordem(reg))
 
+        # Badge PDF gerado
+        pdf_gerado = bool(r.get("pdf_gerado", False))
+        lbl_pdf = QLabel("✓ PDF" if pdf_gerado else "● Pendente")
+        lbl_pdf.setObjectName(f"lbl_pdf_{sb_id}")
+        lbl_pdf.setStyleSheet(f"""
+            color: {'#3fb950' if pdf_gerado else '#8b949e'};
+            background: {'#3fb95018' if pdf_gerado else 'transparent'};
+            border: 1px solid {'#3fb95044' if pdf_gerado else '#30363d'};
+            border-radius: 4px;
+            font-size: 10px; font-weight: 700;
+            padding: 2px 7px;
+        """)
+
+        # Botão Gerar PDF
+        btn_pdf = QPushButton("📄 PDF")
+        btn_pdf.setFixedHeight(26)
+        btn_pdf.setFixedWidth(70)
+        btn_pdf.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        btn_pdf.setEnabled(not pdf_gerado)
+        btn_pdf.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: 1px solid {'#30363d' if pdf_gerado else ACCENT};
+                border-radius: 5px;
+                color: {'#4d5566' if pdf_gerado else ACCENT};
+                font-weight: 700; padding: 0px 6px;
+            }}
+            QPushButton:hover:enabled {{ background: {ACCENT}22; }}
+            QPushButton:disabled {{ opacity: 0.4; }}
+        """)
+        btn_pdf.clicked.connect(lambda _, reg=r, b=btn_pdf, lb=lbl_pdf: self._gerar_pdf_card(reg, b, lb))
+
         bot_h.addWidget(lbl_status)
         bot_h.addStretch()
         bot_h.addWidget(lbl_usuario)
+        bot_h.addWidget(lbl_pdf)
+        bot_h.addWidget(btn_pdf)
         bot_h.addWidget(btn)
         v.addLayout(bot_h)
 
@@ -1058,6 +1097,123 @@ class HistoricoWidget(QWidget):
 
         bo.clicked.connect(continuar)
         dlg.exec()
+
+
+    def _gerar_pdf_card(self, r, btn, lbl):
+        """Gera o PDF diretamente do card sem precisar ir ao formulário."""
+        sb_id = r.get("id") or r.get("supabase_id")
+        dados = r.get("dados")
+
+        if not dados and r.get("motorista"):
+            filial = str(r.get("filial","") or "").upper()
+            dados = {
+                "empresa":      "Agrovia" if "AGRO" in filial else "TopBrasil",
+                "Motorista":    str(r.get("motorista","") or ""),
+                "Cavalo":       str(r.get("placa","") or ""),
+                "Pagador":      str(r.get("pagador","") or ""),
+                "Cliente":      str(r.get("cliente","") or r.get("pagador","") or ""),
+                "Fábrica":      str(r.get("fabrica","") or ""),
+                "Destino":      str(r.get("destino","") or ""),
+                "UF":           str(r.get("uf","") or ""),
+                "Pedido":       str(r.get("pedido","") or ""),
+                "Produto":      str(r.get("produto","") or ""),
+                "Embalagem":    str(r.get("embalagem","") or ""),
+                "Colocador":    str(r.get("colocador","") or ""),
+                "Pagamento":    str(r.get("pagamento","") or ""),
+                "Frete/Emp":    str(r.get("frete_emp","") or ""),
+                "Frete/Mot":    str(r.get("frete_mot","") or ""),
+                "Rota":         str(r.get("rota","") or ""),
+                "Agenciamento": str(r.get("agenciamento","") or ""),
+                "Agência":      str(r.get("agencia","") or ""),
+                "Origem":       str(r.get("origem","") or ""),
+                "Roteiro":      str(r.get("roteiro","") or ""),
+                "Observação":   str(r.get("observacao","") or ""),
+                "CPF":          str(r.get("cpf","") or ""),
+                "Contato":      str(r.get("contato","") or ""),
+                "Carroceria":   str(r.get("carroceria","") or ""),
+                "Carreta 1":    str(r.get("carreta1","") or ""),
+                "Carreta 2":    str(r.get("carreta2","") or ""),
+                "Carreta 3":    str(r.get("carreta3","") or ""),
+                "Fazenda":      str(r.get("fazenda","") or ""),
+                "Solicitante":  str(r.get("solicitante","") or ""),
+                "Peso Total":   str(r.get("peso","") or ""),
+                "Peso":         str(r.get("peso1","") or r.get("peso","") or ""),
+                "Pedido 2":     str(r.get("pedido2","") or ""),
+                "Produto 2":    str(r.get("produto2","") or ""),
+                "Pedido 3":     str(r.get("pedido3","") or ""),
+                "Produto 3":    str(r.get("produto3","") or ""),
+                "Pedido 4":     str(r.get("pedido4","") or ""),
+                "Produto 4":    str(r.get("produto4","") or ""),
+            }
+
+        if not dados:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Aviso", "Dados insuficientes para gerar o PDF.")
+            return
+
+        # Pega pasta da UI principal
+        ui = None
+        w = self.parent()
+        while w:
+            if hasattr(w, "_nav") and hasattr(w, "entradas"):
+                ui = w; break
+            w = w.parent() if hasattr(w, "parent") else None
+
+        pasta = str(Path.home() / "Documents")
+        email = ""
+        conta = None
+        if ui:
+            pasta = getattr(ui, "_pasta_destino", pasta) or pasta
+            email = getattr(ui, "_email_destino", "") or ""
+            conta = getattr(ui, "_conta_gmail", None)
+
+        btn.setEnabled(False)
+        btn.setText("⏳")
+        lbl.setText("Gerando...")
+
+        def on_sucesso(caminho):
+            btn.setText("✓")
+            btn.setEnabled(False)
+            lbl.setText("✓ PDF")
+            lbl.setStyleSheet(
+                "color:#3fb950;background:#3fb95018;border:1px solid #3fb95044;"
+                "border-radius:4px;font-size:10px;font-weight:700;padding:2px 7px;"
+            )
+            if sb_id:
+                self._marcar_pdf_gerado(sb_id)
+            try:
+                os.startfile(caminho)
+            except Exception:
+                pass
+
+        def on_erro(msg):
+            btn.setEnabled(True)
+            btn.setText("📄 PDF")
+            lbl.setText("● Pendente")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Erro ao gerar PDF", msg)
+
+        self._thread_pdf = GeradorThread(dados, pasta, email, conta, imprimir=False)
+        self._thread_pdf.sucesso.connect(on_sucesso)
+        self._thread_pdf.erro.connect(on_erro)
+        self._thread_pdf.start()
+
+    def _marcar_pdf_gerado(self, sb_id):
+        try:
+            import urllib.request as _ur, json as _js, os as _os
+            url = _os.environ.get("SUPABASE_URL","")
+            key = _os.environ.get("SUPABASE_KEY","")
+            if not url or not key: return
+            req = _ur.Request(
+                f"{url}/rest/v1/carregamentos?id=eq.{sb_id}",
+                data=_js.dumps({"pdf_gerado": True}).encode(),
+                headers={"apikey": key, "Authorization": f"Bearer {key}",
+                         "Content-Type": "application/json", "Prefer": "return=minimal"},
+                method="PATCH"
+            )
+            _ur.urlopen(req, timeout=5)
+        except Exception:
+            pass
 
     def _abrir_arquivo(self, caminho):
         import subprocess
