@@ -2612,6 +2612,8 @@ ORIGENS_FABRICA = {
     "INTERMARITIMA":    "CANDEIAS - BA",
     "ARMAZEM VITORIA":  "CANDEIAS - BA",
     "ARMAZÉM VITÓRIA":  "CANDEIAS - BA",
+    "CS PORTO":  "CANDEIAS - BA",
+    "NUTRISOYA":  "AMELIA RODRIGUES",
     "YARA":             "CANDEIAS - BA",
     "UNIGEL":           "CAMAÇARI - BA",
     # TIMAC tratado separadamente em _origem_por_fabrica
