@@ -226,6 +226,8 @@ def gravar_supabase(dados, usuario=None):
         "carreta3":     str(dados.get("Carreta 3", "")).upper(),
         "fazenda":      str(dados.get("Fazenda", "")).upper(),
         "solicitante":  str(dados.get("Solicitante", "")).upper(),
+        "buonny":     str(dados.get("Buonny", "")).strip(),
+        "observacao": str(dados.get("Observação", "") or dados.get("Observacao", "")).strip(),
     }
 
     # Remove campos vazios
