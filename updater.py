@@ -18,8 +18,10 @@ ARQUIVOS = [
     "interface.py",
     "gerador.py",
     "planilha.py",
+    "checklist_timac.py",
     "ordemagroviav2.xlsx",
     "ordemtopv2.xlsx",
+    "Check_list_de_Veiculos.xlsx",
 ]
 
 # Arquivos baixados APENAS se não existirem localmente

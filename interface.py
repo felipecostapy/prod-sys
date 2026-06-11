@@ -3307,6 +3307,7 @@ class UI(QWidget):
 
 
         self.entradas["Fábrica"].textChanged.connect(_atualizar_origem)
+        self.entradas["Fábrica"].textChanged.connect(self._toggle_timac_panel)
 
         r2 = QHBoxLayout(); r2.setSpacing(6)
         self.entradas["Origem"]  = make_input()
@@ -3343,6 +3344,77 @@ class UI(QWidget):
         r.addWidget(make_field("CPF", self.entradas["CPF"]), 1)
         r.addWidget(make_field("Contato", self.entradas["Contato"]), 1)
         v.addLayout(r)
+
+        # ── Painel TIMAC (aparece só quando Fábrica contém TIMAC) ────
+        self._timac_panel = QWidget()
+        self._timac_panel.setStyleSheet(f"background: transparent;")
+        self._timac_panel.setVisible(False)
+        timac_v = QVBoxLayout(self._timac_panel)
+        timac_v.setSpacing(5)
+        timac_v.setContentsMargins(0, 4, 0, 0)
+
+        # Separador com label
+        sep_lbl = QLabel("─── TIMAC CANDEIAS ───────────────────")
+        sep_lbl.setStyleSheet(f"color: #e3b341; font-size: 9px; font-weight: 700; letter-spacing: 1px; background: transparent;")
+        timac_v.addWidget(sep_lbl)
+
+        # Linha 1: RG + Nº CNH + Categoria CNH + Validade CNH
+        t1 = QHBoxLayout(); t1.setSpacing(6)
+        self.entradas["RG"]            = make_input(maiusculo=False)
+        self.entradas["Nº CNH"]        = make_input(maiusculo=False)
+        self.entradas["Categoria CNH"] = make_input()
+        self.entradas["Categoria CNH"].setPlaceholderText("Ex: E")
+        self.entradas["Categoria CNH"].setMaxLength(3)
+        self.entradas["Validade CNH"]  = make_input(maiusculo=False)
+        self.entradas["Validade CNH"].setPlaceholderText("DD/MM/AAAA")
+        t1.addWidget(make_field("RG",            self.entradas["RG"]),            2)
+        t1.addWidget(make_field("Nº CNH",        self.entradas["Nº CNH"]),        2)
+        t1.addWidget(make_field("Categoria CNH", self.entradas["Categoria CNH"]), 1)
+        t1.addWidget(make_field("Validade CNH",  self.entradas["Validade CNH"]),  2)
+        timac_v.addLayout(t1)
+
+        # Linha 2: Estado físico (radio buttons)
+        t2 = QHBoxLayout(); t2.setSpacing(6)
+        lbl_ef = QLabel("ESTADO FÍSICO")
+        lbl_ef.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
+        ef_w = QWidget(); ef_w.setStyleSheet("background: transparent;")
+        ef_h = QHBoxLayout(ef_w); ef_h.setContentsMargins(0,0,0,0); ef_h.setSpacing(10)
+        self._timac_rb_liquido   = QRadioButton("Líquido")
+        self._timac_rb_solido    = QRadioButton("Sólido")
+        self._timac_rb_po        = QRadioButton("Pó")
+        for rb in [self._timac_rb_liquido, self._timac_rb_solido, self._timac_rb_po]:
+            rb.setStyleSheet(f"color: {TEXT}; font-size: 12px; background: transparent;")
+            ef_h.addWidget(rb)
+        ef_h.addStretch()
+        ef_wrap = QWidget(); ef_wrap.setStyleSheet("background: transparent;")
+        ef_vb = QVBoxLayout(ef_wrap); ef_vb.setContentsMargins(0,0,0,0); ef_vb.setSpacing(1)
+        ef_vb.addWidget(lbl_ef); ef_vb.addWidget(ef_w)
+        t2.addWidget(ef_wrap, 1)
+
+        # Tipo de veículo (combo)
+        lbl_tv = QLabel("TIPO DE VEÍCULO")
+        lbl_tv.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
+        TIPOS_VEICULO = ["TRUCK","BI-TRUCK","CARRETA SIMPLES","TRUCADA","VANDERLÉIA","BI-TREM","RODO-TREM","CAÇAMBA"]
+        self._timac_tipo_cb = QComboBox()
+        self._timac_tipo_cb.setEditable(False)
+        self._timac_tipo_cb.addItems(TIPOS_VEICULO)
+        self._timac_tipo_cb.setCurrentIndex(-1)
+        self._timac_tipo_cb.setMinimumHeight(32)
+        self._timac_tipo_cb.setStyleSheet("""
+            QComboBox { padding: 6px 10px; font-size: 12px; }
+            QComboBox::drop-down { border: none; width: 20px; }
+            QComboBox::down-arrow {
+                border-left: 4px solid transparent; border-right: 4px solid transparent;
+                border-top: 5px solid #8b949e; width: 0; height: 0; margin-right: 6px;
+            }
+        """)
+        tv_wrap = QWidget(); tv_wrap.setStyleSheet("background: transparent;")
+        tv_vb = QVBoxLayout(tv_wrap); tv_vb.setContentsMargins(0,0,0,0); tv_vb.setSpacing(1)
+        tv_vb.addWidget(lbl_tv); tv_vb.addWidget(self._timac_tipo_cb)
+        t2.addWidget(tv_wrap, 1)
+        timac_v.addLayout(t2)
+
+        v.addWidget(self._timac_panel)
 
         # ── Buonny ───────────────────────────────────────────────────
         buonny_inp = QLineEdit()
@@ -3451,6 +3523,93 @@ class UI(QWidget):
 
         v.addStretch(1)
         return frame
+
+    def _toggle_timac_panel(self, texto):
+        """Mostra ou oculta o painel TIMAC dependendo do texto da fábrica."""
+        import unicodedata as _ud
+        t = _ud.normalize("NFD", texto.upper().strip()).encode("ascii","ignore").decode()
+        visivel = "TIMAC" in t
+        if hasattr(self, "_timac_panel"):
+            self._timac_panel.setVisible(visivel)
+        if hasattr(self, "_btn_checklist"):
+            self._btn_checklist.setVisible(visivel)
+
+    def _gerar_checklist_timac(self):
+        """Gera o checklist TIMAC preenchido com os dados da ordem atual."""
+        pasta = QFileDialog.getExistingDirectory(self, "Salvar checklist em")
+        if not pasta:
+            return
+        try:
+            from checklist_timac import preencher_checklist_timac
+            dados = self.timac_dados()
+            caminho = preencher_checklist_timac(dados, pasta)
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Checklist gerado")
+            msg.setText(f"Checklist TIMAC salvo com sucesso!")
+            msg.setIcon(QMessageBox.NoIcon)
+            msg.setStyleSheet(f"""
+                QMessageBox {{ background-color: {BG}; }}
+                QLabel {{ color: {TEXT}; font-size: 13px; }}
+                QPushButton {{
+                    background-color: {ACCENT}; color: white; border: none;
+                    border-radius: 6px; padding: 6px 18px; font-weight: 700;
+                }}
+            """)
+            btn_abrir = msg.addButton("📄 Abrir", QMessageBox.AcceptRole)
+            msg.addButton("Fechar", QMessageBox.RejectRole)
+            msg.exec()
+            if msg.clickedButton() == btn_abrir:
+                try:
+                    os.startfile(caminho)
+                except Exception:
+                    pass
+        except Exception as e:
+            QMessageBox.critical(self, "Erro ao gerar checklist", str(e))
+
+    def timac_dados(self):
+        """Retorna dict com os dados do checklist TIMAC para preencher a planilha."""
+        TIPOS_STR = {
+            "TRUCK":           "TIPO: (  X  ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "BI-TRUCK":        "TIPO: (   ) TRUCK    (  X  ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "CARRETA SIMPLES": "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (  X  ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "TRUCADA":         "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (   X ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "VANDERLÉIA":      "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (   X ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "BI-TREM":         "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (   X ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA",
+            "RODO-TREM":       "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (   X ) RODO-TREM    (    ) CAÇAMBA",
+            "CAÇAMBA":         "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (   X ) CAÇAMBA",
+        }
+        # Estado físico
+        if hasattr(self, "_timac_rb_liquido") and self._timac_rb_liquido.isChecked():
+            estado = "LÍQUIDO"
+        elif hasattr(self, "_timac_rb_solido") and self._timac_rb_solido.isChecked():
+            estado = "SÓLIDO"
+        elif hasattr(self, "_timac_rb_po") and self._timac_rb_po.isChecked():
+            estado = "PÓ"
+        else:
+            estado = ""
+
+        tipo_sel = self._timac_tipo_cb.currentText() if hasattr(self, "_timac_tipo_cb") else ""
+        tipo_str = TIPOS_STR.get(tipo_sel, "TIPO: (   ) TRUCK    (   ) BI-TRUCK   (   ) CARRETA SIMPLES   (    ) TRUCADA   (    ) VANDERLÉIA   (    ) BI-TREM   (    ) RODO-TREM    (    ) CAÇAMBA")
+
+        dados = self.coletar()
+        return {
+            "transportadora": dados.get("Pagador", "") or dados.get("Solicitante", ""),
+            "data":           dados.get("Data Apresentação", ""),
+            "motorista":      dados.get("Motorista", ""),
+            "rg":             self.entradas.get("RG", QLineEdit()).text() if hasattr(self, "entradas") else "",
+            "cpf":            dados.get("CPF", ""),
+            "nº_cnh":         self.entradas.get("Nº CNH", QLineEdit()).text() if hasattr(self, "entradas") else "",
+            "validade_cnh":   self.entradas.get("Validade CNH", QLineEdit()).text() if hasattr(self, "entradas") else "",
+            "categoria_cnh":  self.entradas.get("Categoria CNH", QLineEdit()).text() if hasattr(self, "entradas") else "",
+            "produto":        dados.get("Produto", ""),
+            "estado_fisico":  estado,
+            "tipo_str":       tipo_str,
+            "tipo_veiculo":   tipo_sel,
+            "placa_cavalo":   dados.get("Cavalo", ""),
+            "carreta1":       dados.get("Carreta 1", ""),
+            "carreta2":       dados.get("Carreta 2", ""),
+            "carreta3":       dados.get("Carreta 3", ""),
+        }
 
     def _build_carga(self):
         frame, content = make_card("Carga")
@@ -3616,6 +3775,22 @@ class UI(QWidget):
         self.btn3 = QPushButton("NOVA ORDEM")
         self.btn3.setObjectName("btn_nova")
 
+        self._btn_checklist = QPushButton("📋  CHECKLIST TIMAC")
+        self._btn_checklist.setObjectName("btn_checklist")
+        self._btn_checklist.setVisible(False)
+        self._btn_checklist.setStyleSheet(f"""
+            QPushButton {{
+                background: #2a1f00;
+                border: 1px solid #e3b341;
+                border-radius: 6px;
+                color: #e3b341;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 10px 16px;
+            }}
+            QPushButton:hover {{ background: #3a2f00; }}
+        """)
+
         # Banner modo edição — criado ANTES de ser adicionado ao layout
         _chk_ss = f"""
             QCheckBox {{
@@ -3659,7 +3834,7 @@ class UI(QWidget):
         """)
         self._banner_edicao.hide()
 
-        for btn in [self.btn_wpp, self.btn1, self.btn2, self.btn3]:
+        for btn in [self.btn_wpp, self.btn1, self._btn_checklist, self.btn2, self.btn3]:
             btn.setMinimumHeight(40)
             v.addWidget(btn)
 
@@ -3670,6 +3845,7 @@ class UI(QWidget):
         self.btn1.clicked.connect(lambda: self.executar(False))
         self.btn2.clicked.connect(self._gravar_banco)
         self.btn3.clicked.connect(self.nova_ordem)
+        self._btn_checklist.clicked.connect(self._gerar_checklist_timac)
 
         return v
 

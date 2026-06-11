@@ -1,0 +1,32 @@
+
+[2026-06-11 00:22:53.520344] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  dados keys=['transportadora', 'data', 'motorista', 'rg', 'cpf', 'nº_cnh', 'validade_cnh', 'categoria_cnh', 'produto', 'estado_fisico', 'tipo_str', 'tipo_veiculo', 'placa_cavalo', 'carreta1', 'carreta2', 'carreta3']
+
+[2026-06-11 00:24:06.260399] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  dados keys=['transportadora', 'data', 'motorista', 'rg', 'cpf', 'nº_cnh', 'validade_cnh', 'categoria_cnh', 'produto', 'estado_fisico', 'tipo_str', 'tipo_veiculo', 'placa_cavalo', 'carreta1', 'carreta2', 'carreta3']
+
+[2026-06-11 00:25:29.361505] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  dados keys=['transportadora', 'data', 'motorista', 'rg', 'cpf', 'nº_cnh', 'validade_cnh', 'categoria_cnh', 'produto', 'estado_fisico', 'tipo_str', 'tipo_veiculo', 'placa_cavalo', 'carreta1', 'carreta2', 'carreta3']
+
+[2026-06-11 00:26:17.082430] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  modelo=C:\Users\Felp\Documents\GitHub\prod-sys\Check_list_de_Veículos.xls
+
+[2026-06-11 00:27:29.232136] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  modelo=C:\Users\Felp\Documents\GitHub\prod-sys\Check_list_de_Veículos.xlsx
+  caminho_saida=C:\Users\Felp\Desktop\CL_WALDSON_DA_SILVA_OLIVEIRA_RCG9I27.xlsx
+  existe=True
+
+[2026-06-11 00:30:33.548140] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  modelo=C:\Users\Felp\Documents\GitHub\prod-sys\Check_list_de_Veículos.xlsx
+  caminho_saida=C:\Users\Felp\Desktop\CL_WALDSON_DA_SILVA_OLIVEIRA_RCG9I27.xlsx
+  existe=True
+
+[2026-06-11 00:32:14.427945] INICIO
+  pasta_destino=C:/Users/Felp/Desktop
+  modelo=C:\Users\Felp\Documents\GitHub\prod-sys\Check_list_de_Veículos.xlsx
