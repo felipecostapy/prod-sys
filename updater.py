@@ -21,7 +21,7 @@ ARQUIVOS = [
     "checklist_timac.py",
     "ordemagroviav2.xlsx",
     "ordemtopv2.xlsx",
-    "Check_list_de_Veiculos.xlsx",
+    "Check_list_de_Veículos.xlsx",
 ]
 
 # Arquivos baixados APENAS se não existirem localmente
