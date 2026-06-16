@@ -334,6 +334,8 @@ def atualizar_supabase(supabase_id, dados, usuario=None):
         "carreta3":     str(dados.get("Carreta 3", "")).upper(),
         "fazenda":      str(dados.get("Fazenda", "")).upper(),
         "solicitante":  str(dados.get("Solicitante", "")).upper(),
+        "buonny":       str(dados.get("Buonny", "")).strip(),
+        "observacao":   str(dados.get("Observação", "") or dados.get("Observacao", "")).strip(),
     }
     registro = {k: v for k, v in registro.items() if v not in (None, "", 0, 0.0)}
 
