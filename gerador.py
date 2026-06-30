@@ -154,6 +154,11 @@ def adicionar_conta_gmail():
 SUPABASE_URL = "https://xlirwzkmvkzldrssmhxg.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhsaXJ3emttdmt6bGRyc3NtaHhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDgwMTksImV4cCI6MjA5MTE4NDAxOX0.ofTAEn628a-7JzF3REPj-tBcQJUrlXdfaFSbU5Ysfx4"
 
+def _normalizar_placa(v):
+    """Remove hifens, espacos e caracteres especiais. Mantem so letras e numeros maiusculos."""
+    import re as _re
+    return _re.sub(r"[^A-Za-z0-9]", "", str(v or "")).upper()
+
 def gravar_supabase(dados, usuario=None):
     """Grava carregamento no Supabase via API REST. Silencioso em caso de erro."""
     import urllib.request
@@ -188,7 +193,7 @@ def gravar_supabase(dados, usuario=None):
         "cliente":      str(dados.get("Cliente", "")).upper(),
         "motorista":    str(dados.get("Motorista", "")).upper(),
         "agencia":      str(dados.get("Agência", "") or dados.get("Agencia", "")).upper(),
-        "placa":        str(dados.get("Cavalo", "")).upper(),
+        "placa":        _normalizar_placa(dados.get("Cavalo", "")),
         "fabrica":      str(dados.get("Fábrica", "")).upper(),
         "destino":      str(dados.get("Destino", "")).upper(),
         "uf":           str(dados.get("UF", "")).upper(),
@@ -221,9 +226,9 @@ def gravar_supabase(dados, usuario=None):
         "cpf":          str(dados.get("CPF", "")).upper(),
         "contato":      str(dados.get("Contato", "")).upper(),
         "carroceria":   str(dados.get("Carroceria", "")).upper(),
-        "carreta1":     str(dados.get("Carreta 1", "")).upper(),
-        "carreta2":     str(dados.get("Carreta 2", "")).upper(),
-        "carreta3":     str(dados.get("Carreta 3", "")).upper(),
+        "carreta1":     _normalizar_placa(dados.get("Carreta 1", "")),
+        "carreta2":     _normalizar_placa(dados.get("Carreta 2", "")),
+        "carreta3":     _normalizar_placa(dados.get("Carreta 3", "")),
         "fazenda":      str(dados.get("Fazenda", "")).upper(),
         "solicitante":  str(dados.get("Solicitante", "")).upper(),
         "buonny":     str(dados.get("Buonny", "")).strip(),
@@ -297,7 +302,7 @@ def atualizar_supabase(supabase_id, dados, usuario=None):
         "cliente":      str(dados.get("Cliente", "")).upper(),
         "motorista":    str(dados.get("Motorista", "")).upper(),
         "agencia":      str(dados.get("Agência", "") or dados.get("Agencia", "")).upper(),
-        "placa":        str(dados.get("Cavalo", "")).upper(),
+        "placa":        _normalizar_placa(dados.get("Cavalo", "")),
         "fabrica":      str(dados.get("Fábrica", "")).upper(),
         "destino":      str(dados.get("Destino", "")).upper(),
         "uf":           str(dados.get("UF", "")).upper(),
@@ -329,9 +334,9 @@ def atualizar_supabase(supabase_id, dados, usuario=None):
         "cpf":          str(dados.get("CPF", "")).upper(),
         "contato":      str(dados.get("Contato", "")).upper(),
         "carroceria":   str(dados.get("Carroceria", "")).upper(),
-        "carreta1":     str(dados.get("Carreta 1", "")).upper(),
-        "carreta2":     str(dados.get("Carreta 2", "")).upper(),
-        "carreta3":     str(dados.get("Carreta 3", "")).upper(),
+        "carreta1":     _normalizar_placa(dados.get("Carreta 1", "")),
+        "carreta2":     _normalizar_placa(dados.get("Carreta 2", "")),
+        "carreta3":     _normalizar_placa(dados.get("Carreta 3", "")),
         "fazenda":      str(dados.get("Fazenda", "")).upper(),
         "solicitante":  str(dados.get("Solicitante", "")).upper(),
         "buonny":       str(dados.get("Buonny", "")).strip(),
