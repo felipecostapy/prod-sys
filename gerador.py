@@ -383,7 +383,7 @@ REGRAS_EMAIL = {
     "FERTIMAXI": "agendamento@fertimaxi.com.br;fatura@fertimaxi.com.br;luis.cerqueira@fertimaxi.com.br;marcos.brandao@fertimaxi.com.br",
     "INTERMARITIMA": "tmi@intermaritima.com.br",
     "ARMAZEM VITORIA": "balancaazv02@vitoriaarmazens.com.br;balancaazv01@vitoriaarmazens.com.br",
-    "_EXTRA": "logistica@conterraagronegocios.com.br"
+    "_EXTRA": "logistica@conterraagronegocios.com.br;"
 }
 
 def obter_email_fabrica(fabrica):
