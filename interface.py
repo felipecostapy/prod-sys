@@ -3437,6 +3437,40 @@ class UI(QWidget):
         lbl_emb = QLabel("TIPO DE EMBALAGEM")
         lbl_emb.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
         self._itafos_emb_cb = QComboBox()
+        # Combo de produto ITAFOS
+        lbl_prod_itafos = QLabel("PRODUTO")
+        lbl_prod_itafos.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
+        self._itafos_prod_cb = QComboBox()
+        PRODUTOS_ITAFOS = [
+            "ÁCIDO SULFÚRICO - H2SO4",
+            "BORRA DE ENXOFRE",
+            "I-ACTIVE 12% GRANEL",
+            "I-ACTIVE 12% BIG BAG",
+            "I-ACTIVE 15%",
+            "I-ACTIVE 18%",
+            "SUPERFORTE DUO GRANEL",
+            "SUPERFORTE DUO BIG BAG",
+            "SUPERFORTE GRAN GRANEL",
+            "SUPERFORTE GRAN BIG BAG",
+            "MINÉRIO HOMOGENEIZADO 12%",
+        ]
+        for p in PRODUTOS_ITAFOS:
+            self._itafos_prod_cb.addItem(p)
+        self._itafos_prod_cb.setStyleSheet(f"""
+            QComboBox {{
+                background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 6px;
+                color: {TEXT}; font-size: 12px; padding: 6px 10px; font-weight: 600;
+            }}
+            QComboBox::drop-down {{ border: none; width: 24px; }}
+            QComboBox QAbstractItemView {{
+                background: {SURFACE}; color: {TEXT}; selection-background-color: {ACCENT};
+            }}
+        """)
+        prod_wrap = QWidget(); prod_wrap.setStyleSheet("background: transparent;")
+        prod_vb = QVBoxLayout(prod_wrap); prod_vb.setContentsMargins(0,0,0,0); prod_vb.setSpacing(2)
+        prod_vb.addWidget(lbl_prod_itafos); prod_vb.addWidget(self._itafos_prod_cb)
+        itafos_v.addWidget(prod_wrap)
+
         for t in ["GRANEL", "BIG BAG", "TANQUE"]:
             self._itafos_emb_cb.addItem(t)
         self._itafos_emb_cb.setStyleSheet(f"""
@@ -3632,9 +3666,9 @@ class UI(QWidget):
         if hasattr(self, "_itafos_emb_cb"):
             embalagem = self._itafos_emb_cb.currentText()
 
-        # Primeiro pedido e produto (sufixo vazio = linha 1)
+        # Produto: usa o combo ITAFOS se disponível, senão o campo padrão
         pedido  = d.get("Pedido", "")
-        produto = d.get("Produto", "")
+        produto = self._itafos_prod_cb.currentText() if hasattr(self, "_itafos_prod_cb") else d.get("Produto", "")
 
         # Peso total
         peso = d.get("Peso Total", "") or d.get("Peso", "")

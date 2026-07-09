@@ -70,10 +70,14 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
     if isinstance(data_raw, (datetime.date, datetime.datetime)):
         data_fmt = data_raw.strftime("%d/%m/%Y")
     elif data_raw:
-        try:
-            data_fmt = datetime.datetime.strptime(str(data_raw), "%Y-%m-%d").strftime("%d/%m/%Y")
-        except ValueError:
-            data_fmt = str(data_raw)
+        # Suporta DD/MM/YYYY (já formatado) ou YYYY-MM-DD (banco)
+        if "/" in str(data_raw):
+            data_fmt = str(data_raw)  # já está em DD/MM/YYYY
+        else:
+            try:
+                data_fmt = datetime.datetime.strptime(str(data_raw), "%Y-%m-%d").strftime("%d/%m/%Y")
+            except ValueError:
+                data_fmt = str(data_raw)
     else:
         data_fmt = datetime.date.today().strftime("%d/%m/%Y")
 
