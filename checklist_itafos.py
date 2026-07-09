@@ -93,7 +93,10 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
 
     # Toneladas
     try:
-        toneladas = float(str(dados.get("peso", "") or "0").replace(",", "."))
+        raw = str(dados.get("peso", "") or "0").strip()
+        # Remove separador de milhar (ponto antes de 3 dígitos) e troca vírgula por ponto
+        raw = raw.replace(".", "").replace(",", ".") if "," in raw else raw.replace(".", "", raw.count(".") - 1) if raw.count(".") > 1 else raw
+        toneladas = float(raw)
         ton_str   = f"{toneladas:g}".replace(".", ",")
     except (ValueError, TypeError):
         ton_str = str(dados.get("peso", ""))
