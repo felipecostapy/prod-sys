@@ -94,8 +94,15 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
     # Toneladas
     try:
         raw = str(dados.get("peso", "") or "0").strip()
-        # Remove separador de milhar (ponto antes de 3 dígitos) e troca vírgula por ponto
-        raw = raw.replace(".", "").replace(",", ".") if "," in raw else raw.replace(".", "", raw.count(".") - 1) if raw.count(".") > 1 else raw
+        # Se tem vírgula: formato BR (1.234,56) — remove pontos, troca vírgula por ponto
+        if "," in raw:
+            raw = raw.replace(".", "").replace(",", ".")
+        else:
+            # Só tem ponto: verifica se é separador de milhar (ex: 50.000, 1.000)
+            # Heurística: parte após o ponto tem 3 dígitos → milhar
+            partes = raw.split(".")
+            if len(partes) == 2 and len(partes[1]) == 3:
+                raw = partes[0]  # descarta a parte decimal (era milhar)
         toneladas = float(raw)
         ton_str   = f"{toneladas:g}".replace(".", ",")
     except (ValueError, TypeError):
@@ -131,7 +138,7 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
         ws["E15"].value = cavalo
         ws["H15"].value = carr_12
         ws["K15"].value = carreta3
-        ws["C16"].value = data_fmt
+        ws["C16"].value = f"'{data_fmt}"  # apóstrofo força texto puro no Excel
         ws["L16"].value = embalagem
         ws["A19"].value = ton_str
         ws["E19"].value = produto
