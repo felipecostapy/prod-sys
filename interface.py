@@ -3416,6 +3416,47 @@ class UI(QWidget):
 
         v.addWidget(self._timac_panel)
 
+        # ── Painel ITAFOS (aparece só quando Fábrica contém ITAFOS) ────
+        self._itafos_panel = QWidget()
+        self._itafos_panel.setStyleSheet("background: transparent;")
+        self._itafos_panel.setVisible(False)
+        itafos_v = QVBoxLayout(self._itafos_panel)
+        itafos_v.setSpacing(5)
+        itafos_v.setContentsMargins(0, 4, 0, 0)
+
+        sep_itafos = QLabel("─── ITAFOS ──────────────────────────")
+        sep_itafos.setStyleSheet(f"color: #58a6ff; font-size: 9px; font-weight: 700; letter-spacing: 1px; background: transparent;")
+        itafos_v.addWidget(sep_itafos)
+
+        # Peso Bruto
+        self.entradas["Peso Bruto"] = make_input(maiusculo=False)
+        self.entradas["Peso Bruto"].setPlaceholderText("Ex: 34.500")
+        itafos_v.addWidget(make_field("Peso Bruto", self.entradas["Peso Bruto"]))
+
+        # Tipo de Embalagem (combo)
+        lbl_emb = QLabel("TIPO DE EMBALAGEM")
+        lbl_emb.setStyleSheet(f"color: {MUTED}; font-size: 9px; font-weight: 700; letter-spacing: 0.8px; background: transparent;")
+        self._itafos_emb_cb = QComboBox()
+        for t in ["GRANEL", "BIG BAG", "TANQUE"]:
+            self._itafos_emb_cb.addItem(t)
+        self._itafos_emb_cb.setStyleSheet(f"""
+            QComboBox {{
+                background: {SURFACE}; border: 1px solid {BORDER}; border-radius: 6px;
+                color: {TEXT}; font-size: 12px; padding: 6px 10px; font-weight: 600;
+            }}
+            QComboBox::drop-down {{ border: none; width: 24px; }}
+            QComboBox QAbstractItemView {{
+                background: {SURFACE}; color: {TEXT}; selection-background-color: {ACCENT};
+            }}
+        """)
+        emb_wrap = QWidget(); emb_wrap.setStyleSheet("background: transparent;")
+        emb_vb = QVBoxLayout(emb_wrap); emb_vb.setContentsMargins(0,0,0,0); emb_vb.setSpacing(2)
+        emb_vb.addWidget(lbl_emb); emb_vb.addWidget(self._itafos_emb_cb)
+        itafos_v.addWidget(emb_wrap)
+
+        v.addWidget(self._itafos_panel)
+        self.entradas["Fábrica"].textChanged.connect(self._toggle_itafos_panel)
+
         # ── Buonny ───────────────────────────────────────────────────
         buonny_inp = QLineEdit()
         buonny_inp.setMinimumHeight(32)
@@ -3565,6 +3606,61 @@ class UI(QWidget):
                     pass
         except Exception as e:
             QMessageBox.critical(self, "Erro ao gerar checklist", str(e))
+
+    def _toggle_itafos_panel(self, texto):
+        """Mostra ou oculta o painel ITAFOS dependendo do texto da fábrica."""
+        import unicodedata as _ud
+        t = _ud.normalize("NFD", texto.upper().strip()).encode("ascii","ignore").decode()
+        visivel = "ITAFOS" in t
+        if hasattr(self, "_itafos_panel"):
+            self._itafos_panel.setVisible(visivel)
+        if hasattr(self, "_btn_itafos"):
+            self._btn_itafos.setVisible(visivel)
+
+    def _gerar_ordem_itafos(self):
+        """Gera a Ordem Individual de Carregamento ITAFOS."""
+        from checklist_itafos import preencher_itafos
+
+        pasta = QFileDialog.getExistingDirectory(self, "Salvar ordem ITAFOS em")
+        if not pasta:
+            return
+
+        # Coletar dados via coletar() — mesmo padrão do restante do sistema
+        d = self.coletar()
+
+        embalagem = "GRANEL"
+        if hasattr(self, "_itafos_emb_cb"):
+            embalagem = self._itafos_emb_cb.currentText()
+
+        # Primeiro pedido e produto (sufixo vazio = linha 1)
+        pedido  = d.get("Pedido", "")
+        produto = d.get("Produto", "")
+
+        # Peso total
+        peso = d.get("Peso Total", "") or d.get("Peso", "")
+
+        dados = {
+            "cliente":    d.get("Cliente",   ""),
+            "pedido":     pedido,
+            "motorista":  d.get("Motorista", ""),
+            "cpf":        d.get("CPF",       ""),
+            "peso_bruto": d.get("Peso Bruto",""),
+            "peso":       peso,
+            "placa":      d.get("Cavalo",    ""),
+            "carreta1":   d.get("Carreta 1", ""),
+            "carreta2":   d.get("Carreta 2", ""),
+            "carreta3":   d.get("Carreta 3", ""),
+            "data":       d.get("Data",      ""),
+            "produto":    produto,
+            "embalagem":  embalagem,
+        }
+
+        try:
+            pdf = preencher_itafos(dados, pasta_destino=pasta)
+            QMessageBox.information(self, "Ordem ITAFOS", f"PDF gerado:\n{pdf}")
+        except Exception as ex:
+            QMessageBox.critical(self, "Erro", f"Falha ao gerar ordem ITAFOS:\n{ex}")
+
 
     def timac_dados(self):
         """Retorna dict com os dados do checklist TIMAC para preencher a planilha."""
@@ -3834,7 +3930,23 @@ class UI(QWidget):
         """)
         self._banner_edicao.hide()
 
-        for btn in [self.btn_wpp, self.btn1, self._btn_checklist, self.btn2, self.btn3]:
+        self._btn_itafos = QPushButton("📋  ORDEM ITAFOS")
+        self._btn_itafos.setObjectName("btn_itafos")
+        self._btn_itafos.setVisible(False)
+        self._btn_itafos.setStyleSheet(f"""
+            QPushButton {{
+                background: #001a2e;
+                border: 1px solid #58a6ff;
+                border-radius: 6px;
+                color: #58a6ff;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 10px 16px;
+            }}
+            QPushButton:hover {{ background: #002a45; }}
+        """)
+
+        for btn in [self.btn_wpp, self.btn1, self._btn_checklist, self._btn_itafos, self.btn2, self.btn3]:
             btn.setMinimumHeight(40)
             v.addWidget(btn)
 
@@ -3846,6 +3958,7 @@ class UI(QWidget):
         self.btn2.clicked.connect(self._gravar_banco)
         self.btn3.clicked.connect(self.nova_ordem)
         self._btn_checklist.clicked.connect(self._gerar_checklist_timac)
+        self._btn_itafos.clicked.connect(self._gerar_ordem_itafos)
 
         return v
 
