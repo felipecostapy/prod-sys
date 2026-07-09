@@ -90,7 +90,7 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
     # Toneladas
     try:
         toneladas = float(str(dados.get("peso", "") or "0").replace(",", "."))
-        ton_str   = f"{toneladas:.3f}".replace(".", ",")
+        ton_str   = f"{toneladas:g}".replace(".", ",")
     except (ValueError, TypeError):
         ton_str = str(dados.get("peso", ""))
 
