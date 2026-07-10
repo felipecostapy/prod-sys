@@ -94,17 +94,19 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
     # Toneladas
     try:
         raw = str(dados.get("peso", "") or "0").strip()
-        # Se tem vírgula: formato BR (1.234,56) — remove pontos, troca vírgula por ponto
         if "," in raw:
+            # Formato BR: 1.234,56 → 1234.56
             raw = raw.replace(".", "").replace(",", ".")
-        else:
-            # Só tem ponto: verifica se é separador de milhar (ex: 50.000, 1.000)
-            # Heurística: parte após o ponto tem 3 dígitos → milhar
+        elif "." in raw:
             partes = raw.split(".")
             if len(partes) == 2 and len(partes[1]) == 3:
-                raw = partes[0]  # descarta a parte decimal (era milhar)
+                # Separador de milhar: 37.000 → 37
+                raw = partes[0]
         toneladas = float(raw)
-        ton_str   = f"{toneladas:g}".replace(".", ",")
+        # Se o sistema gravou em kg (>= 1000 e múltiplo de 1000), converter para toneladas
+        if toneladas >= 1000 and toneladas % 1 == 0:
+            toneladas = toneladas / 1000
+        ton_str = f"{toneladas:g}".replace(".", ",")
     except (ValueError, TypeError):
         ton_str = str(dados.get("peso", ""))
 
@@ -138,7 +140,9 @@ def preencher_itafos(dados: dict, pasta_destino: str | Path | None = None) -> Pa
         ws["E15"].value = cavalo
         ws["H15"].value = carr_12
         ws["K15"].value = carreta3
-        ws["C16"].value = f"'{data_fmt}"  # apóstrofo força texto puro no Excel
+        # Data: forçar como texto para evitar inversão DD/MM pelo Excel
+        ws["C16"].api.NumberFormat = "@"
+        ws["C16"].value = data_fmt
         ws["L16"].value = embalagem
         ws["A19"].value = ton_str
         ws["E19"].value = produto
