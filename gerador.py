@@ -381,8 +381,8 @@ def formatar_telefone(telefone):
 
 REGRAS_EMAIL = {
     "FERTIMAXI": "agendamento@fertimaxi.com.br;fatura@fertimaxi.com.br;luis.cerqueira@fertimaxi.com.br;marcos.brandao@fertimaxi.com.br",
-    "INTERMARITIMA": "tmi@intermaritima.com.br",
-    "ARMAZEM VITORIA": "balancaazv02@vitoriaarmazens.com.br;balancaazv01@vitoriaarmazens.com.br",
+    "INTERMARITIMA": "agendamento@fertimaxi.com.br;fatura@fertimaxi.com.br;tmi@intermaritima.com.br",
+    "ARMAZEM VITORIA": "agendamento@fertimaxi.com.br;fatura@fertimaxi.com.br;balancaazv02@vitoriaarmazens.com.br;balancaazv01@vitoriaarmazens.com.br",
     "_EXTRA": "logistica@conterraagronegocios.com.br;vitoria.sales@fertinsumos.com.br"
 }
 
