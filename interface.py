@@ -956,6 +956,7 @@ class HistoricoWidget(QWidget):
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
                 "Pedágio":      str(r.get("pedagio","") or ""),
+                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1126,6 +1127,7 @@ class HistoricoWidget(QWidget):
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
                 "Pedágio":      str(r.get("pedagio","") or ""),
+                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1296,6 +1298,7 @@ class HistoricoWidget(QWidget):
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
                 "Pedágio":      str(r.get("pedagio","") or ""),
+                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -3819,10 +3822,41 @@ class UI(QWidget):
         self.entradas["UF"]        = make_input()
         self.entradas["Frete/Emp"] = make_input()
         self.entradas["Frete/Mot"] = make_input()
+
+        # Campo oculto para capturar tipo_frete no coletar()
+        _tf = QLineEdit(); _tf.setVisible(False); _tf.setText("TON")
+        self.entradas["Tipo Frete"] = _tf
+
+        # Toggle TON / TOTAL
+        self._btn_tipo_frete = QPushButton("● TON")
+        self._btn_tipo_frete.setCheckable(True)
+        self._btn_tipo_frete.setFixedHeight(32)
+        self._btn_tipo_frete.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; border: 1px solid {BORDER2};
+                border-radius: 6px; color: {MUTED};
+                font-size: 11px; font-weight: 700; padding: 0px 10px;
+            }}
+            QPushButton:checked {{
+                background: #e3b34122; border-color: #e3b341; color: #e3b341;
+            }}
+        """)
+        self._btn_tipo_frete.clicked.connect(self._toggle_tipo_frete)
+        self.entradas["Frete/Emp"].editingFinished.connect(self._auto_tipo_frete)
+        self.entradas["Frete/Mot"].editingFinished.connect(self._auto_tipo_frete)
+
+        tipo_ctn = QWidget(); tipo_ctn.setStyleSheet("background: transparent;")
+        tipo_lay = QVBoxLayout(tipo_ctn); tipo_lay.setSpacing(2); tipo_lay.setContentsMargins(0,0,0,0)
+        lbl_tipo = QLabel("TIPO")
+        lbl_tipo.setStyleSheet(f"color:{MUTED};font-size:9px;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        tipo_lay.addWidget(lbl_tipo)
+        tipo_lay.addWidget(self._btn_tipo_frete)
+
         r1.addWidget(make_field("Agência",   self.entradas["Agência"]),   3)
         r1.addWidget(make_field("UF",        self.entradas["UF"]),        1)
         r1.addWidget(make_field("Frete/Emp", self.entradas["Frete/Emp"]), 2)
         r1.addWidget(make_field("Frete/Mot", self.entradas["Frete/Mot"]), 2)
+        r1.addWidget(tipo_ctn)
         v.addLayout(r1)
 
         r2 = QHBoxLayout(); r2.setSpacing(6)
@@ -3878,6 +3912,30 @@ class UI(QWidget):
 
         v.addStretch()
         return frame
+
+    def _toggle_tipo_frete(self):
+        self._set_tipo_frete("TOTAL" if self._btn_tipo_frete.isChecked() else "TON")
+
+    def _set_tipo_frete(self, tipo: str):
+        is_total = (tipo == "TOTAL")
+        self._btn_tipo_frete.blockSignals(True)
+        self._btn_tipo_frete.setChecked(is_total)
+        self._btn_tipo_frete.setText("● TOTAL" if is_total else "● TON")
+        self._btn_tipo_frete.blockSignals(False)
+        self.entradas["Tipo Frete"].setText(tipo)
+
+    def _auto_tipo_frete(self):
+        for chave in ("Frete/Emp", "Frete/Mot"):
+            w = self.entradas.get(chave)
+            if w:
+                raw = w.text().replace(".", "").replace(",", "").strip()
+                try:
+                    if float(raw) > 9999:
+                        self._set_tipo_frete("TOTAL")
+                        return
+                except ValueError:
+                    pass
+        self._set_tipo_frete("TON")
 
     def _build_assinatura(self):
         frame, content = make_card("Assinatura")
@@ -5207,6 +5265,9 @@ class UI(QWidget):
                 elif isinstance(w, QComboBox):
                     w.setEditText(valor)
 
+        if hasattr(self, "_btn_tipo_frete"):
+            self._set_tipo_frete(dados.get("Tipo Frete") or "TON")
+
         emp = dados.get("empresa")
         if emp:
             self._aplicar_empresa(emp)
@@ -5224,6 +5285,8 @@ class UI(QWidget):
                     if isinstance(inp, QLineEdit): inp.clear()
                     elif isinstance(inp, QComboBox): inp.setCurrentIndex(-1)
                 stack.setCurrentIndex(1 if i == 0 else 0)
+            if hasattr(self, "_btn_tipo_frete"):
+                self._set_tipo_frete("TON")
             self.setar_data_hoje()
             return
 
@@ -5275,6 +5338,8 @@ class UI(QWidget):
 
         self.escolher_empresa()
         self.setar_data_hoje()
+        if hasattr(self, "_btn_tipo_frete"):
+            self._set_tipo_frete("TON")
         # Restaura assinatura do usuário logado após limpar campos
         if self.assinatura_usuario and "Assinatura" in self.entradas:
             self.entradas["Assinatura"].setText(self.assinatura_usuario)
