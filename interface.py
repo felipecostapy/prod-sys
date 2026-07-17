@@ -955,8 +955,9 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
-                "Pedágio":      str(r.get("pedagio","") or ""),
-                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
+                "Pedágio":        str(r.get("pedagio","") or ""),
+                "Tipo Frete Emp": str(r.get("tipo_frete_emp","") or ""),
+                "Tipo Frete Mot": str(r.get("tipo_frete_mot","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1126,8 +1127,9 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
-                "Pedágio":      str(r.get("pedagio","") or ""),
-                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
+                "Pedágio":        str(r.get("pedagio","") or ""),
+                "Tipo Frete Emp": str(r.get("tipo_frete_emp","") or ""),
+                "Tipo Frete Mot": str(r.get("tipo_frete_mot","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1297,8 +1299,9 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
-                "Pedágio":      str(r.get("pedagio","") or ""),
-                "Tipo Frete":   str(r.get("tipo_frete","") or ""),
+                "Pedágio":        str(r.get("pedagio","") or ""),
+                "Tipo Frete Emp": str(r.get("tipo_frete_emp","") or ""),
+                "Tipo Frete Mot": str(r.get("tipo_frete_mot","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -3818,45 +3821,58 @@ class UI(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
 
         r1 = QHBoxLayout(); r1.setSpacing(6)
-        self.entradas["Agência"]   = make_input()
-        self.entradas["UF"]        = make_input()
-        self.entradas["Frete/Emp"] = make_input()
-        self.entradas["Frete/Mot"] = make_input()
+        self.entradas["Agência"] = make_input()
+        self.entradas["UF"]      = make_input()
 
-        # Campo oculto para capturar tipo_frete no coletar()
-        _tf = QLineEdit(); _tf.setVisible(False); _tf.setText("TON")
-        self.entradas["Tipo Frete"] = _tf
-
-        # Toggle TON / TOTAL
-        self._btn_tipo_frete = QPushButton("● TON")
-        self._btn_tipo_frete.setCheckable(True)
-        self._btn_tipo_frete.setFixedHeight(32)
-        self._btn_tipo_frete.setStyleSheet(f"""
+        _TOGGLE_SS = f"""
             QPushButton {{
                 background: transparent; border: 1px solid {BORDER2};
-                border-radius: 6px; color: {MUTED};
-                font-size: 11px; font-weight: 700; padding: 0px 10px;
+                border-radius: 4px; color: {MUTED};
+                font-size: 10px; font-weight: 700; padding: 1px 8px; min-height: 20px;
             }}
             QPushButton:checked {{
                 background: #e3b34122; border-color: #e3b341; color: #e3b341;
             }}
-        """)
-        self._btn_tipo_frete.clicked.connect(self._toggle_tipo_frete)
-        self.entradas["Frete/Emp"].editingFinished.connect(self._auto_tipo_frete)
-        self.entradas["Frete/Mot"].editingFinished.connect(self._auto_tipo_frete)
+        """
 
-        tipo_ctn = QWidget(); tipo_ctn.setStyleSheet("background: transparent;")
-        tipo_lay = QVBoxLayout(tipo_ctn); tipo_lay.setSpacing(2); tipo_lay.setContentsMargins(0,0,0,0)
-        lbl_tipo = QLabel("TIPO")
-        lbl_tipo.setStyleSheet(f"color:{MUTED};font-size:9px;font-weight:700;letter-spacing:0.5px;background:transparent;")
-        tipo_lay.addWidget(lbl_tipo)
-        tipo_lay.addWidget(self._btn_tipo_frete)
+        # ── Frete Empresa + toggle ────────────────────────────────────
+        self.entradas["Frete/Emp"] = make_input()
+        _tf_emp = QLineEdit(); _tf_emp.setVisible(False); _tf_emp.setText("TON")
+        self.entradas["Tipo Frete Emp"] = _tf_emp
+        self._btn_tipo_frete_emp = QPushButton("● TON")
+        self._btn_tipo_frete_emp.setCheckable(True)
+        self._btn_tipo_frete_emp.setStyleSheet(_TOGGLE_SS)
+        self._btn_tipo_frete_emp.clicked.connect(lambda: self._toggle_tipo_frete("emp"))
+        self.entradas["Frete/Emp"].editingFinished.connect(lambda: self._auto_tipo_frete("emp"))
+        emp_ctn = QWidget(); emp_ctn.setStyleSheet("background: transparent;")
+        emp_lay = QVBoxLayout(emp_ctn); emp_lay.setSpacing(2); emp_lay.setContentsMargins(0,0,0,0)
+        emp_lbl = QLabel("Frete/Emp")
+        emp_lbl.setStyleSheet(f"color:{MUTED};font-size:9px;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        emp_lay.addWidget(emp_lbl)
+        emp_lay.addWidget(self.entradas["Frete/Emp"])
+        emp_lay.addWidget(self._btn_tipo_frete_emp)
 
-        r1.addWidget(make_field("Agência",   self.entradas["Agência"]),   3)
-        r1.addWidget(make_field("UF",        self.entradas["UF"]),        1)
-        r1.addWidget(make_field("Frete/Emp", self.entradas["Frete/Emp"]), 2)
-        r1.addWidget(make_field("Frete/Mot", self.entradas["Frete/Mot"]), 2)
-        r1.addWidget(tipo_ctn)
+        # ── Frete Motorista + toggle ──────────────────────────────────
+        self.entradas["Frete/Mot"] = make_input()
+        _tf_mot = QLineEdit(); _tf_mot.setVisible(False); _tf_mot.setText("TON")
+        self.entradas["Tipo Frete Mot"] = _tf_mot
+        self._btn_tipo_frete_mot = QPushButton("● TON")
+        self._btn_tipo_frete_mot.setCheckable(True)
+        self._btn_tipo_frete_mot.setStyleSheet(_TOGGLE_SS)
+        self._btn_tipo_frete_mot.clicked.connect(lambda: self._toggle_tipo_frete("mot"))
+        self.entradas["Frete/Mot"].editingFinished.connect(lambda: self._auto_tipo_frete("mot"))
+        mot_ctn = QWidget(); mot_ctn.setStyleSheet("background: transparent;")
+        mot_lay = QVBoxLayout(mot_ctn); mot_lay.setSpacing(2); mot_lay.setContentsMargins(0,0,0,0)
+        mot_lbl = QLabel("Frete/Mot")
+        mot_lbl.setStyleSheet(f"color:{MUTED};font-size:9px;font-weight:700;letter-spacing:0.5px;background:transparent;")
+        mot_lay.addWidget(mot_lbl)
+        mot_lay.addWidget(self.entradas["Frete/Mot"])
+        mot_lay.addWidget(self._btn_tipo_frete_mot)
+
+        r1.addWidget(make_field("Agência", self.entradas["Agência"]), 3)
+        r1.addWidget(make_field("UF",      self.entradas["UF"]),      1)
+        r1.addWidget(emp_ctn, 2)
+        r1.addWidget(mot_ctn, 2)
         v.addLayout(r1)
 
         r2 = QHBoxLayout(); r2.setSpacing(6)
@@ -3913,29 +3929,31 @@ class UI(QWidget):
         v.addStretch()
         return frame
 
-    def _toggle_tipo_frete(self):
-        self._set_tipo_frete("TOTAL" if self._btn_tipo_frete.isChecked() else "TON")
+    def _toggle_tipo_frete(self, campo: str):
+        btn = self._btn_tipo_frete_emp if campo == "emp" else self._btn_tipo_frete_mot
+        self._set_tipo_frete(campo, "TOTAL" if btn.isChecked() else "TON")
 
-    def _set_tipo_frete(self, tipo: str):
+    def _set_tipo_frete(self, campo: str, tipo: str):
+        btn     = self._btn_tipo_frete_emp if campo == "emp" else self._btn_tipo_frete_mot
+        hid_key = "Tipo Frete Emp"         if campo == "emp" else "Tipo Frete Mot"
         is_total = (tipo == "TOTAL")
-        self._btn_tipo_frete.blockSignals(True)
-        self._btn_tipo_frete.setChecked(is_total)
-        self._btn_tipo_frete.setText("● TOTAL" if is_total else "● TON")
-        self._btn_tipo_frete.blockSignals(False)
-        self.entradas["Tipo Frete"].setText(tipo)
+        btn.blockSignals(True)
+        btn.setChecked(is_total)
+        btn.setText("● TOTAL" if is_total else "● TON")
+        btn.blockSignals(False)
+        self.entradas[hid_key].setText(tipo)
 
-    def _auto_tipo_frete(self):
-        for chave in ("Frete/Emp", "Frete/Mot"):
-            w = self.entradas.get(chave)
-            if w:
-                raw = w.text().replace(".", "").replace(",", "").strip()
-                try:
-                    if float(raw) > 9999:
-                        self._set_tipo_frete("TOTAL")
-                        return
-                except ValueError:
-                    pass
-        self._set_tipo_frete("TON")
+    def _auto_tipo_frete(self, campo: str):
+        chave = "Frete/Emp" if campo == "emp" else "Frete/Mot"
+        w = self.entradas.get(chave)
+        tipo = "TON"
+        if w:
+            raw = w.text().replace(".", "").replace(",", "").strip()
+            try:
+                tipo = "TOTAL" if float(raw) > 9999 else "TON"
+            except ValueError:
+                pass
+        self._set_tipo_frete(campo, tipo)
 
     def _build_assinatura(self):
         frame, content = make_card("Assinatura")
@@ -5265,8 +5283,9 @@ class UI(QWidget):
                 elif isinstance(w, QComboBox):
                     w.setEditText(valor)
 
-        if hasattr(self, "_btn_tipo_frete"):
-            self._set_tipo_frete(dados.get("Tipo Frete") or "TON")
+        if hasattr(self, "_btn_tipo_frete_emp"):
+            self._set_tipo_frete("emp", dados.get("Tipo Frete Emp") or "TON")
+            self._set_tipo_frete("mot", dados.get("Tipo Frete Mot") or "TON")
 
         emp = dados.get("empresa")
         if emp:
@@ -5285,8 +5304,9 @@ class UI(QWidget):
                     if isinstance(inp, QLineEdit): inp.clear()
                     elif isinstance(inp, QComboBox): inp.setCurrentIndex(-1)
                 stack.setCurrentIndex(1 if i == 0 else 0)
-            if hasattr(self, "_btn_tipo_frete"):
-                self._set_tipo_frete("TON")
+            if hasattr(self, "_btn_tipo_frete_emp"):
+                self._set_tipo_frete("emp", "TON")
+                self._set_tipo_frete("mot", "TON")
             self.setar_data_hoje()
             return
 
