@@ -955,6 +955,7 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
+                "Pedágio":      str(r.get("pedagio","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1124,6 +1125,7 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
+                "Pedágio":      str(r.get("pedagio","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -1293,6 +1295,7 @@ class HistoricoWidget(QWidget):
                 "Frete/Mot":    str(r.get("frete_mot","") or ""),
                 "Rota":         str(r.get("rota","") or ""),
                 "Agenciamento": str(r.get("agenciamento","") or ""),
+                "Pedágio":      str(r.get("pedagio","") or ""),
                 "Agência":      str(r.get("agencia","") or ""),
                 "Origem":       str(r.get("origem","") or ""),
                 "Roteiro":      str(r.get("roteiro","") or ""),
@@ -2645,7 +2648,7 @@ def parsear_mensagem_whatsapp(texto):
     # Lista de todas as chaves conhecidas para detectar campo vazio
     CHAVES = ["FILIAL","PAGADOR","CLIENTE","AGENCIA","AGÊNCIA","MOTORISTA","PLACA",
               "FABRICA","FÁBRICA","DESTINO","UF","FAZENDA","PESO","FRETE/EMP",
-              "FRETE/MOT","ROTA","AGENCIAMENTO","PAGAMENTO","PEDIDO","PRODUTO",
+              "FRETE/MOT","ROTA","AGENCIAMENTO","PEDÁGIO","PAGAMENTO","PEDIDO","PRODUTO",
               "EMBALAGEM","COLOCADOR","SOLICITANTE","STATUS"]
     _CHAVES_RE = "|".join(CHAVES)
 
@@ -2726,6 +2729,10 @@ def parsear_mensagem_whatsapp(texto):
     agenciamento = extrair("AGENCIAMENTO")
     if agenciamento:
         resultado["Agenciamento"] = agenciamento
+
+    pedagio = extrair("PEDÁGIO")
+    if pedagio:
+        resultado["Pedágio"] = pedagio
 
     uf_campo = extrair("UF").upper()
     if uf_campo:
@@ -3821,8 +3828,10 @@ class UI(QWidget):
         r2 = QHBoxLayout(); r2.setSpacing(6)
         self.entradas["Rota"]         = make_input()
         self.entradas["Agenciamento"] = make_input()
+        self.entradas["Pedágio"]      = make_input()
         r2.addWidget(make_field("Rota",         self.entradas["Rota"]),         1)
         r2.addWidget(make_field("Agenciamento", self.entradas["Agenciamento"]), 1)
+        r2.addWidget(make_field("Pedágio",      self.entradas["Pedágio"]),      1)
         v.addLayout(r2)
 
         r3 = QHBoxLayout(); r3.setSpacing(6)
@@ -5154,7 +5163,7 @@ class UI(QWidget):
         campos_simples = ["Fábrica", "Cliente", "Fazenda", "Origem",
                           "Destino", "Motorista", "Cavalo", "Pagador",
                           "Solicitante", "Agência", "UF", "Frete/Emp", "Frete/Mot",
-                          "Rota", "Agenciamento", "Colocador", "Pagamento",
+                          "Rota", "Agenciamento", "Pedágio", "Colocador", "Pagamento",
                           "Peso Total", "CPF", "Contato", "Buonny", "Carroceria",
                           "Carreta 1", "Carreta 2", "Carreta 3",
                           "Peso", "Peso 2", "Peso 3", "Peso 4",
